@@ -2,6 +2,7 @@ import { poseidon2 } from "poseidon-lite";
 import MerkleTree from "fixed-merkle-tree";
 import { WithdrawalProof } from "../types";
 import { computeCommitment, computeNullifierHash } from "./crypto";
+import snarkjs from "snarkjs";
 
 /**
  * Build merkle tree from commitments
@@ -74,9 +75,6 @@ export async function generateWithdrawalProof(
       pubSignals: [nullifierHash, recipientBigInt, root],
     };
   }
-
-  // Dynamic import for snarkjs (only load when needed)
-  const snarkjs = await import("snarkjs");
 
   // Prepare inputs
   const input = {
@@ -170,4 +168,3 @@ export async function generateWithdrawalProofFromData(
     data.circuitZkey
   );
 }
-
