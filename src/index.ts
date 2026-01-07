@@ -3,14 +3,18 @@
  * Easy-to-use TypeScript SDK for privacy-preserving transactions on EVM and Solana
  */
 
+import { SDKConfig } from "./types";
+import { AintiVirusEVM } from "./evm";
+import { AintiVirusSolana } from "./solana";
+
 // Export types
 export * from "./types";
 
 // Export EVM SDK
-export { AintiVirusEVM } from "./evm";
+export { AintiVirusEVM };
 
 // Export Solana SDK
-export { AintiVirusSolana } from "./solana";
+export { AintiVirusSolana };
 
 // Export utilities
 export * from "./utils/crypto";
@@ -26,8 +30,8 @@ export type { SDKConfig } from "./types";
  * Can be initialized for either EVM or Solana (or both)
  */
 export class AintiVirusSDK {
-  public evm?: import("./evm").AintiVirusEVM;
-  public solana?: import("./solana").AintiVirusSolana;
+  public evm?: AintiVirusEVM;
+  public solana?: AintiVirusSolana;
 
   /**
    * Initialize SDK with configuration

@@ -68,12 +68,13 @@ export class AintiVirusEVM {
     tokenAddress: string,
     signerOrProvider: Signer | Provider
   ) {
-    this.provider =
-      signerOrProvider instanceof Signer
-        ? signerOrProvider.provider!
-        : signerOrProvider;
-    this.signer =
-      signerOrProvider instanceof Signer ? signerOrProvider : (null as any);
+    // Check if it's a Signer by checking for provider property
+    // In ethers v6, Signer has a provider property, Provider doesn't
+    const isSigner = signerOrProvider && "provider" in signerOrProvider && signerOrProvider.provider !== null;
+    this.provider = isSigner
+      ? (signerOrProvider as Signer).provider!
+      : (signerOrProvider as Provider);
+    this.signer = isSigner ? (signerOrProvider as Signer) : (null as any);
 
     this.factory = new Contract(
       factoryAddress,
@@ -99,6 +100,13 @@ export class AintiVirusEVM {
    */
   getToken(): Contract {
     return this.token;
+  }
+
+  /**
+   * Get the provider instance
+   */
+  getProvider(): Provider {
+    return this.provider;
   }
 
   /**

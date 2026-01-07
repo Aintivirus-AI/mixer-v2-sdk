@@ -151,7 +151,7 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
           txHash: receipt.hash,
           blockNumber: receipt.blockNumber,
           blockTime: (
-            await evmSDK.getFactory().provider.getBlock(receipt.blockNumber)
+            await evmSDK.getProvider().getBlock(receipt.blockNumber)
           )?.timestamp,
         };
       } else if (chainType === ChainType.SOLANA) {
@@ -181,7 +181,7 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
           txHash: receipt.hash,
           blockNumber: receipt.blockNumber,
           blockTime: (
-            await evmSDK.getFactory().provider.getBlock(receipt.blockNumber)
+            await evmSDK.getProvider().getBlock(receipt.blockNumber)
           )?.timestamp,
         };
       } else if (chainType === ChainType.SOLANA) {
@@ -208,7 +208,7 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
           txHash: receipt.hash,
           blockNumber: receipt.blockNumber,
           blockTime: (
-            await evmSDK.getFactory().provider.getBlock(receipt.blockNumber)
+            await evmSDK.getProvider().getBlock(receipt.blockNumber)
           )?.timestamp,
         };
       } else if (chainType === ChainType.SOLANA) {
@@ -238,7 +238,7 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
           txHash: receipt.hash,
           blockNumber: receipt.blockNumber,
           blockTime: (
-            await evmSDK.getFactory().provider.getBlock(receipt.blockNumber)
+            await evmSDK.getProvider().getBlock(receipt.blockNumber)
           )?.timestamp,
         };
       } else if (chainType === ChainType.SOLANA) {
@@ -268,7 +268,7 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
           txHash: receipt.hash,
           blockNumber: receipt.blockNumber,
           blockTime: (
-            await evmSDK.getFactory().provider.getBlock(receipt.blockNumber)
+            await evmSDK.getProvider().getBlock(receipt.blockNumber)
           )?.timestamp,
         };
       } else if (chainType === ChainType.SOLANA) {

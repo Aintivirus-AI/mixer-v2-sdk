@@ -13,7 +13,7 @@ import {
   StakerRecord,
 } from "../types";
 import { Wallet } from "@coral-xyz/anchor";
-import { Connection } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { AintiVirusEVM } from "../evm";
 import { AintiVirusSolana } from "../solana";
 import { useAccount, useWalletClient, usePublicClient } from "wagmi";
@@ -183,7 +183,8 @@ export function useView(config: ViewHookConfig): UseViewReturn {
         return evmSDK.getMixer(mode, amount);
       } else if (chainType === ChainType.SOLANA) {
         if (!solanaSDK) return null;
-        return solanaSDK.getMixer(mode, amount);
+        const mixerPubkey = await solanaSDK.getMixer(mode, amount);
+        return mixerPubkey.toString();
       }
       return null;
     },
@@ -330,7 +331,8 @@ export function useView(config: ViewHookConfig): UseViewReturn {
         return evmSDK.getStakingAddress();
       } else if (chainType === ChainType.SOLANA) {
         if (!solanaSDK) return null;
-        return solanaSDK.getStakingAddress();
+        const stakingAddress = await solanaSDK.getStakingAddress();
+        return stakingAddress.toString();
       }
       return null;
     },
@@ -347,7 +349,7 @@ export function useView(config: ViewHookConfig): UseViewReturn {
         return evmSDK.getTokenBalance(address);
       } else if (chainType === ChainType.SOLANA) {
         if (!solanaSDK) return null;
-        return solanaSDK.getTokenBalance(address);
+        return solanaSDK.getTokenBalance(new PublicKey(address));
       }
       return null;
     },
@@ -364,7 +366,7 @@ export function useView(config: ViewHookConfig): UseViewReturn {
         return evmSDK.getEthBalance(address);
       } else if (chainType === ChainType.SOLANA) {
         if (!solanaSDK) return null;
-        return solanaSDK.getSolBalance(address);
+        return solanaSDK.getSolBalance(new PublicKey(address));
       }
       return null;
     },
