@@ -44,16 +44,6 @@ export interface UseAdminReturn {
   ) => Promise<TransactionResult>;
   startStakeSeason: (chainType: ChainType) => Promise<TransactionResult>;
 
-  // Verifier/Hasher management (EVM only, inherited from CoreFactory)
-  setVerifier: (
-    chainType: ChainType,
-    verifierAddress: string
-  ) => Promise<TransactionResult>;
-  setHasher: (
-    chainType: ChainType,
-    hasherAddress: string
-  ) => Promise<TransactionResult>;
-
   isEVMReady: boolean;
   isSolanaReady: boolean;
 }
@@ -112,9 +102,6 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
     }
     try {
       return new AintiVirusSolana(
-        config.solana.factoryProgramId,
-        config.solana.mixerProgramId,
-        config.solana.stakingProgramId,
         config.solanaWallet,
         config.solanaConnection,
         config.solana.tokenMint
@@ -150,9 +137,8 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
         return {
           txHash: receipt.hash,
           blockNumber: receipt.blockNumber,
-          blockTime: (
-            await evmSDK.getProvider().getBlock(receipt.blockNumber)
-          )?.timestamp,
+          blockTime: (await evmSDK.getProvider().getBlock(receipt.blockNumber))
+            ?.timestamp,
         };
       } else if (chainType === ChainType.SOLANA) {
         if (!solanaSDK) {
@@ -180,9 +166,8 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
         return {
           txHash: receipt.hash,
           blockNumber: receipt.blockNumber,
-          blockTime: (
-            await evmSDK.getProvider().getBlock(receipt.blockNumber)
-          )?.timestamp,
+          blockTime: (await evmSDK.getProvider().getBlock(receipt.blockNumber))
+            ?.timestamp,
         };
       } else if (chainType === ChainType.SOLANA) {
         if (!solanaSDK) {
@@ -207,75 +192,17 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
         return {
           txHash: receipt.hash,
           blockNumber: receipt.blockNumber,
-          blockTime: (
-            await evmSDK.getProvider().getBlock(receipt.blockNumber)
-          )?.timestamp,
+          blockTime: (await evmSDK.getProvider().getBlock(receipt.blockNumber))
+            ?.timestamp,
         };
       } else if (chainType === ChainType.SOLANA) {
         if (!solanaSDK) {
           throw new Error("Solana SDK not initialized");
         }
-        return solanaSDK.startStakeSeason();
-      }
-      throw new Error(`Unsupported chain type: ${chainType}`);
-    },
-    [evmSDK, solanaSDK]
-  );
-
-  const setVerifier = useCallback(
-    async (
-      chainType: ChainType,
-      verifierAddress: string
-    ): Promise<TransactionResult> => {
-      if (chainType === ChainType.EVM) {
-        if (!evmSDK) {
-          throw new Error("EVM SDK not initialized");
-        }
-        const factory = evmSDK.getFactory();
-        const tx = await factory.setVerifier(verifierAddress);
-        const receipt = await tx.wait();
-        return {
-          txHash: receipt.hash,
-          blockNumber: receipt.blockNumber,
-          blockTime: (
-            await evmSDK.getProvider().getBlock(receipt.blockNumber)
-          )?.timestamp,
-        };
-      } else if (chainType === ChainType.SOLANA) {
-        if (!solanaSDK) {
-          throw new Error("Solana SDK not initialized");
-        }
-        return solanaSDK.setVerifier(verifierAddress);
-      }
-      throw new Error(`Unsupported chain type: ${chainType}`);
-    },
-    [evmSDK, solanaSDK]
-  );
-
-  const setHasher = useCallback(
-    async (
-      chainType: ChainType,
-      hasherAddress: string
-    ): Promise<TransactionResult> => {
-      if (chainType === ChainType.EVM) {
-        if (!evmSDK) {
-          throw new Error("EVM SDK not initialized");
-        }
-        const factory = evmSDK.getFactory();
-        const tx = await factory.setHasher(hasherAddress);
-        const receipt = await tx.wait();
-        return {
-          txHash: receipt.hash,
-          blockNumber: receipt.blockNumber,
-          blockTime: (
-            await evmSDK.getProvider().getBlock(receipt.blockNumber)
-          )?.timestamp,
-        };
-      } else if (chainType === ChainType.SOLANA) {
-        if (!solanaSDK) {
-          throw new Error("Solana SDK not initialized");
-        }
-        return solanaSDK.setHasher(hasherAddress);
+        // Get current season and increment by 1 for next season
+        const currentSeason = await solanaSDK.getCurrentStakeSeason();
+        const nextSeasonId = currentSeason + 1n;
+        return solanaSDK.startStakeSeason(nextSeasonId);
       }
       throw new Error(`Unsupported chain type: ${chainType}`);
     },
@@ -286,8 +213,6 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
     setFeeRate,
     setStakingSeasonPeriod,
     startStakeSeason,
-    setVerifier,
-    setHasher,
     isEVMReady,
     isSolanaReady,
   };

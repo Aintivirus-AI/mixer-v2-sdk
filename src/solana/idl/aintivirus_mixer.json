@@ -1,0 +1,615 @@
+{
+  "address": "CGZ8t3ZgSnEkN5zbVsAJ21d5bu9vrsBvBh7xxnZZcrVu",
+  "metadata": {
+    "name": "aintivirus_mixer",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "deposit_state",
+      "docs": [
+        "State-only deposit function (called by factory/vault)",
+        "Only manages merkle tree state, no fund transfers"
+      ],
+      "discriminator": [
+        216,
+        87,
+        194,
+        14,
+        24,
+        111,
+        64,
+        12
+      ],
+      "accounts": [
+        {
+          "name": "mixer_config"
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "commitment_checker",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  109,
+                  105,
+                  116,
+                  109,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "commitment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "merkle_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  114,
+                  107,
+                  108,
+                  101,
+                  95,
+                  116,
+                  114,
+                  101,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mixer_config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_last_root",
+      "docs": [
+        "Get the last root from merkle tree"
+      ],
+      "discriminator": [
+        136,
+        48,
+        63,
+        201,
+        37,
+        13,
+        204,
+        43
+      ],
+      "accounts": [
+        {
+          "name": "merkle_tree"
+        }
+      ],
+      "args": [],
+      "returns": {
+        "array": [
+          "u8",
+          32
+        ]
+      }
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Initialize a new mixer instance with fixed mode and amount",
+        "Called by factory when deploying a new mixer pool"
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "mixer_config",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_merkle_tree",
+      "docs": [
+        "Initialize the merkle tree for this mixer instance"
+      ],
+      "discriminator": [
+        67,
+        143,
+        80,
+        157,
+        177,
+        227,
+        11,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "merkle_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  114,
+                  107,
+                  108,
+                  101,
+                  95,
+                  116,
+                  114,
+                  101,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mixer_config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mixer_config",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "levels",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "validate_withdraw",
+      "docs": [
+        "State-only withdraw validation function (called by factory/vault)",
+        "Validates proof and returns recipient address, no fund transfers"
+      ],
+      "discriminator": [
+        173,
+        112,
+        85,
+        194,
+        234,
+        32,
+        99,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "mixer_config"
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "recipient"
+        },
+        {
+          "name": "nullifier_hash_checker",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  108,
+                  108,
+                  105,
+                  102,
+                  105,
+                  101,
+                  114,
+                  95,
+                  104,
+                  97,
+                  115,
+                  104
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "nullifier_hash_precomputed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "merkle_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  114,
+                  107,
+                  108,
+                  101,
+                  95,
+                  116,
+                  114,
+                  101,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mixer_config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "instruction_data",
+          "type": "bytes"
+        },
+        {
+          "name": "nullifier_hash_precomputed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ],
+      "returns": "pubkey"
+    }
+  ],
+  "accounts": [
+    {
+      "name": "CommitmentAndNullifierHashExist",
+      "discriminator": [
+        41,
+        117,
+        172,
+        132,
+        137,
+        159,
+        136,
+        150
+      ]
+    },
+    {
+      "name": "MerkleTreeWithHistory",
+      "discriminator": [
+        116,
+        166,
+        248,
+        38,
+        103,
+        144,
+        29,
+        71
+      ]
+    },
+    {
+      "name": "MixerConfig",
+      "discriminator": [
+        249,
+        68,
+        151,
+        145,
+        180,
+        148,
+        212,
+        172
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidMinimumDepositAmount",
+      "msg": "Invalid deposit amount. Deposit amount under the mininum allowed"
+    },
+    {
+      "code": 6001,
+      "name": "NeedMaintainerRole",
+      "msg": "Need Maintainer Role for this action"
+    },
+    {
+      "code": 6002,
+      "name": "VerificationFailed",
+      "msg": "Proof verification failed"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidProof",
+      "msg": "Invalid proof"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidMode",
+      "msg": "Invalid mixing mode"
+    },
+    {
+      "code": 6005,
+      "name": "FailedToParsePublicInputs",
+      "msg": "Failed to parse public inputs"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidEscrowVault",
+      "msg": "Invalid escrow vault account"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidLevels",
+      "msg": "Levels should be greater than 0 and less than 32"
+    },
+    {
+      "code": 6008,
+      "name": "TreeFull",
+      "msg": "Merkle tree is full. No more leaves can be added"
+    },
+    {
+      "code": 6009,
+      "name": "RootNotFound",
+      "msg": "Root not found"
+    },
+    {
+      "code": 6010,
+      "name": "ArithmeticError",
+      "msg": "Arithmetic addition error"
+    },
+    {
+      "code": 6011,
+      "name": "NullifierHashNotMatched",
+      "msg": "Nullifier hash not matched"
+    },
+    {
+      "code": 6012,
+      "name": "RootNotMatched",
+      "msg": "Root is not matched"
+    },
+    {
+      "code": 6013,
+      "name": "MissingAccount",
+      "msg": "Missing Account"
+    },
+    {
+      "code": 6014,
+      "name": "NoRewardsToClaim",
+      "msg": "No rewards to claim"
+    },
+    {
+      "code": 6015,
+      "name": "StakeSeasonNotStarted",
+      "msg": "Stake season has not started yet"
+    },
+    {
+      "code": 6016,
+      "name": "CurrentSeasonActive",
+      "msg": "Current season is still active"
+    },
+    {
+      "code": 6017,
+      "name": "CurrentStakeSeasonExpired",
+      "msg": "Current stake season has expired"
+    },
+    {
+      "code": 6018,
+      "name": "NoStakedBalance",
+      "msg": "No staked balance to unstake"
+    },
+    {
+      "code": 6019,
+      "name": "UserAlreadyStaked",
+      "msg": "User already staked"
+    },
+    {
+      "code": 6020,
+      "name": "CannotClaimForOlderSeason",
+      "msg": "Cannot claim rewards for an older season"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidSeasonDataProvided",
+      "msg": "Invalid season data provided"
+    }
+  ],
+  "types": [
+    {
+      "name": "CommitmentAndNullifierHashExist",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "exist",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MerkleTreeWithHistory",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mixer_config",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "levels",
+            "type": "u8"
+          },
+          {
+            "name": "current_root_index",
+            "type": "u8"
+          },
+          {
+            "name": "next_index",
+            "type": "u32"
+          },
+          {
+            "name": "filled_subtrees",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                24
+              ]
+            }
+          },
+          {
+            "name": "roots",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                30
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MixerConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "mode",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

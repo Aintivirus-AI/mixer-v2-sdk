@@ -10,7 +10,8 @@ export enum ChainType {
  * Asset modes for deposits and withdrawals
  */
 export enum AssetMode {
-  ETH = 0, // For EVM: ETH, For Solana: SOL
+  SOL = 0,
+  ETH = 0,
   TOKEN = 1,
 }
 

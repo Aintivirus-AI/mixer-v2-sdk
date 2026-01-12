@@ -139,9 +139,6 @@ export function useAintiVirus(config: UnifiedHookConfig): UseAintiVirusReturn {
     }
     try {
       return new AintiVirusSolana(
-        config.solana.factoryProgramId,
-        config.solana.mixerProgramId,
-        config.solana.stakingProgramId,
         config.solanaWallet,
         config.solanaConnection,
         config.solana.tokenMint

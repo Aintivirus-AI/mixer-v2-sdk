@@ -38,7 +38,6 @@ export class AintiVirusEVM {
     "function setStakingSeasonPeriod(uint256 _period)",
     "function startStakeSeason()",
     "function setVerifier(address _verifier)",
-    "function setHasher(address _hasher)",
     "event MixerDeployed(address indexed mixer, uint256 indexed mode, uint256 indexed amount)",
     "event Deposit(bytes32 indexed commitment, uint32 leafIndex, uint256 timestamp)",
     "event Withdrawal(address to, bytes32 nullifierHash)",
@@ -70,7 +69,10 @@ export class AintiVirusEVM {
   ) {
     // Check if it's a Signer by checking for provider property
     // In ethers v6, Signer has a provider property, Provider doesn't
-    const isSigner = signerOrProvider && "provider" in signerOrProvider && signerOrProvider.provider !== null;
+    const isSigner =
+      signerOrProvider &&
+      "provider" in signerOrProvider &&
+      signerOrProvider.provider !== null;
     this.provider = isSigner
       ? (signerOrProvider as Signer).provider!
       : (signerOrProvider as Provider);

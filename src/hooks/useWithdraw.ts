@@ -100,9 +100,6 @@ export function useWithdraw(config: WithdrawHookConfig): UseWithdrawReturn {
     }
     try {
       return new AintiVirusSolana(
-        config.solana.factoryProgramId,
-        config.solana.mixerProgramId,
-        config.solana.stakingProgramId,
         config.solanaWallet,
         config.solanaConnection,
         config.solana.tokenMint

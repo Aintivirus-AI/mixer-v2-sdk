@@ -7,7 +7,9 @@
   "scripts": {
     "build": "npx tsc",
     "dev": "npx tsc --watch",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test:devnet": "tsx test-devnet.ts",
+    "test:solana": "tsx test-solana-devnet.ts"
   },
   "keywords": [
     "web3",
@@ -21,9 +23,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@coral-xyz/anchor": "^0.29.0",
-    "@solana/spl-token": "^0.3.9",
-    "@solana/web3.js": "^1.87.6",
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
     "ethers": "^6.9.0",
     "fixed-merkle-tree": "^0.7.0",
     "poseidon-lite": "^0.3.0",
@@ -35,7 +37,9 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/snarkjs": "^0.7.9",
+    "dotenv": "^16.6.1",
     "react": "^18.2.0",
+    "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "viem": "^2.0.0",
     "wagmi": "^2.0.0"

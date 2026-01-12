@@ -1,0 +1,989 @@
+{
+  "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ",
+  "metadata": {
+    "name": "aintivirus_staking",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "add_rewards",
+      "docs": [
+        "State-only function to add rewards to the current staking season",
+        "Funds are held by the Factory, this only updates state"
+      ],
+      "discriminator": [
+        88,
+        186,
+        25,
+        227,
+        38,
+        137,
+        81,
+        23
+      ],
+      "accounts": [
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staking.current_stake_season",
+                "account": "Staking"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "claim_state",
+      "docs": [
+        "State-only claim function for Vault to call",
+        "Returns the reward amount to be claimed"
+      ],
+      "discriminator": [
+        36,
+        201,
+        187,
+        105,
+        53,
+        12,
+        80,
+        36
+      ],
+      "accounts": [
+        {
+          "name": "staking",
+          "writable": true
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "season_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "staker_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staker"
+              }
+            ]
+          }
+        },
+        {
+          "name": "season_claimed",
+          "writable": true
+        },
+        {
+          "name": "staker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": "u8"
+        },
+        {
+          "name": "season_id",
+          "type": "u64"
+        }
+      ],
+      "returns": "u64"
+    },
+    {
+      "name": "get_current_stake_season",
+      "docs": [
+        "Get the current stake season ID"
+      ],
+      "discriminator": [
+        191,
+        97,
+        105,
+        154,
+        238,
+        55,
+        235,
+        157
+      ],
+      "accounts": [
+        {
+          "name": "staking"
+        }
+      ],
+      "args": [],
+      "returns": "u64"
+    },
+    {
+      "name": "initialize_first_season",
+      "docs": [
+        "Initialize the first stake season (called after initialize_staking)"
+      ],
+      "discriminator": [
+        247,
+        113,
+        37,
+        46,
+        212,
+        195,
+        83,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_staking",
+      "docs": [
+        "Initialize the staking program"
+      ],
+      "discriminator": [
+        184,
+        41,
+        251,
+        154,
+        146,
+        145,
+        197,
+        77
+      ],
+      "accounts": [
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vault"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_staking_season_period",
+      "docs": [
+        "Set the staking season period (admin function)"
+      ],
+      "discriminator": [
+        8,
+        199,
+        253,
+        28,
+        90,
+        92,
+        54,
+        154
+      ],
+      "accounts": [
+        {
+          "name": "staking",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "period",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "stake_state",
+      "docs": [
+        "State-only stake function for Vault to call"
+      ],
+      "discriminator": [
+        100,
+        204,
+        175,
+        75,
+        61,
+        111,
+        3,
+        100
+      ],
+      "accounts": [
+        {
+          "name": "staking",
+          "writable": true
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staking.current_stake_season",
+                "account": "Staking"
+              }
+            ]
+          }
+        },
+        {
+          "name": "staker_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staker"
+              }
+            ]
+          }
+        },
+        {
+          "name": "staker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "start_stake_season",
+      "docs": [
+        "Start a new stake season (called by vault when current season expires)"
+      ],
+      "discriminator": [
+        206,
+        139,
+        170,
+        171,
+        72,
+        36,
+        232,
+        138
+      ],
+      "accounts": [
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "current_stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staking.current_stake_season",
+                "account": "Staking"
+              }
+            ]
+          }
+        },
+        {
+          "name": "next_stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "next_season_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "next_season_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "unstake_state",
+      "docs": [
+        "State-only unstake function for Vault to call",
+        "Returns the amount to be released"
+      ],
+      "discriminator": [
+        142,
+        204,
+        80,
+        168,
+        91,
+        60,
+        47,
+        2
+      ],
+      "accounts": [
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staking.current_stake_season",
+                "account": "Staking"
+              }
+            ]
+          }
+        },
+        {
+          "name": "staker_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staker"
+              }
+            ]
+          }
+        },
+        {
+          "name": "staker"
+        },
+        {
+          "name": "vault",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": "u8"
+        }
+      ],
+      "returns": "u64"
+    }
+  ],
+  "accounts": [
+    {
+      "name": "SeasonClaimed",
+      "discriminator": [
+        170,
+        107,
+        128,
+        85,
+        97,
+        112,
+        144,
+        192
+      ]
+    },
+    {
+      "name": "StakeSeason",
+      "discriminator": [
+        248,
+        16,
+        246,
+        183,
+        42,
+        157,
+        19,
+        231
+      ]
+    },
+    {
+      "name": "StakerRecord",
+      "discriminator": [
+        32,
+        233,
+        136,
+        62,
+        39,
+        209,
+        227,
+        86
+      ]
+    },
+    {
+      "name": "Staking",
+      "discriminator": [
+        242,
+        134,
+        183,
+        223,
+        18,
+        13,
+        184,
+        23
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidMode",
+      "msg": "Invalid mode. Must be 0 (SOL) or 1 (TOKEN)"
+    },
+    {
+      "code": 6001,
+      "name": "OnlyVaultCanCall",
+      "msg": "Only vault can call this function"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6003,
+      "name": "CurrentStakeSeasonExpired",
+      "msg": "Current staking season has expired"
+    },
+    {
+      "code": 6004,
+      "name": "UserAlreadyStakedSol",
+      "msg": "User already staked SOL"
+    },
+    {
+      "code": 6005,
+      "name": "UserAlreadyStakedToken",
+      "msg": "User already staked Token"
+    },
+    {
+      "code": 6006,
+      "name": "StakeSeasonNotStarted",
+      "msg": "Season is not started yet"
+    },
+    {
+      "code": 6007,
+      "name": "CurrentSeasonActive",
+      "msg": "Current season is still active"
+    },
+    {
+      "code": 6008,
+      "name": "UserNotStakedInSeason",
+      "msg": "User has not staked in this season"
+    },
+    {
+      "code": 6009,
+      "name": "NoRewardsToClaim",
+      "msg": "No reward to claim"
+    },
+    {
+      "code": 6010,
+      "name": "AlreadyClaimedThisSeason",
+      "msg": "User already claimed this season's rewards"
+    },
+    {
+      "code": 6011,
+      "name": "NoStakedBalance",
+      "msg": "No staked balance to unstake"
+    },
+    {
+      "code": 6012,
+      "name": "SameValue",
+      "msg": "New value must not be same with current value"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidSeasonId",
+      "msg": "Invalid season ID"
+    },
+    {
+      "code": 6014,
+      "name": "ArithmeticError",
+      "msg": "Arithmetic error"
+    }
+  ],
+  "types": [
+    {
+      "name": "SeasonClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "claimed",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StakeSeason",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "season_id",
+            "type": "u64"
+          },
+          {
+            "name": "start_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "end_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "staking_season_period",
+            "type": "u64"
+          },
+          {
+            "name": "total_staked_sol_amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_staked_token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_reward_sol_amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_reward_token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_sol_weight_value",
+            "type": "u64"
+          },
+          {
+            "name": "total_token_weight_value",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StakerRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sol_staked_season_id",
+            "type": "u64"
+          },
+          {
+            "name": "token_staked_season_id",
+            "type": "u64"
+          },
+          {
+            "name": "sol_staked_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "token_staked_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "staked_sol_amount",
+            "type": "u64"
+          },
+          {
+            "name": "staked_token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "sol_weight_value",
+            "type": "u64"
+          },
+          {
+            "name": "token_weight_value",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Staking",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "staking_season_period",
+            "type": "u64"
+          },
+          {
+            "name": "current_stake_season",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,2951 @@
+{
+  "address": "4LXpWrr1BFYkffdxYNnV7LhMT4ETYt38amAGRQZg2WoJ",
+  "metadata": {
+    "name": "aintivirus_factory",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "claim_sol",
+      "docs": [
+        "Claim SOL rewards – factory sends funds, staking validates state"
+      ],
+      "discriminator": [
+        139,
+        113,
+        179,
+        189,
+        190,
+        30,
+        132,
+        195
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_sol",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "season_id"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "staker_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staker"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "season_claimed",
+          "writable": true
+        },
+        {
+          "name": "staker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "staking_program",
+          "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "season_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "claim_token",
+      "docs": [
+        "Claim token rewards – factory sends funds, staking validates state"
+      ],
+      "discriminator": [
+        116,
+        206,
+        27,
+        191,
+        166,
+        19,
+        0,
+        73
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "season_id"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "staker_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staker"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "season_claimed",
+          "writable": true
+        },
+        {
+          "name": "staker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vault_token_account",
+          "writable": true
+        },
+        {
+          "name": "staker_token_account",
+          "writable": true
+        },
+        {
+          "name": "staking_program",
+          "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "season_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "deploy_mixer",
+      "docs": [
+        "Deploy a new mixer instance for a specific mode and amount"
+      ],
+      "discriminator": [
+        17,
+        36,
+        4,
+        123,
+        3,
+        17,
+        229,
+        153
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "factory"
+          ]
+        },
+        {
+          "name": "mixer_pool",
+          "writable": true
+        },
+        {
+          "name": "mixer_config",
+          "writable": true
+        },
+        {
+          "name": "merkle_tree",
+          "writable": true
+        },
+        {
+          "name": "mixer_program",
+          "address": "CGZ8t3ZgSnEkN5zbVsAJ21d5bu9vrsBvBh7xxnZZcrVu"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "deposit",
+      "docs": [
+        "Deposit into a mixer pool – funds stay in factory vaults, mixer manages only state (CPI)"
+      ],
+      "discriminator": [
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_sol",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token_account",
+          "writable": true
+        },
+        {
+          "name": "mixer_pool"
+        },
+        {
+          "name": "mixer_config"
+        },
+        {
+          "name": "merkle_tree",
+          "writable": true
+        },
+        {
+          "name": "commitment_checker",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "user_token_account",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staking.current_stake_season",
+                "account": "Staking"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "mixer_program",
+          "address": "CGZ8t3ZgSnEkN5zbVsAJ21d5bu9vrsBvBh7xxnZZcrVu"
+        },
+        {
+          "name": "staking_program",
+          "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_mixer",
+      "docs": [
+        "Get mixer config address for a specific mode and amount"
+      ],
+      "discriminator": [
+        228,
+        253,
+        58,
+        52,
+        160,
+        239,
+        122,
+        191
+      ],
+      "accounts": [
+        {
+          "name": "mixer_pool"
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "returns": "pubkey"
+    },
+    {
+      "name": "initialize_factory",
+      "docs": [
+        "Initialize the factory and its main vaults"
+      ],
+      "discriminator": [
+        179,
+        64,
+        75,
+        250,
+        39,
+        254,
+        240,
+        178
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vault_sol",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token_account"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "staking_program",
+          "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fee_rate",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_first_season",
+      "docs": [
+        "Initialize the first stake season (called after initialize_staking)"
+      ],
+      "discriminator": [
+        247,
+        113,
+        37,
+        46,
+        212,
+        195,
+        83,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "factory"
+          ]
+        },
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "staking_program",
+          "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_fee_rate",
+      "docs": [
+        "Set fee rate (admin function)"
+      ],
+      "discriminator": [
+        53,
+        243,
+        137,
+        65,
+        8,
+        140,
+        158,
+        6
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "factory"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_fee_rate",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_staking_season_period",
+      "docs": [
+        "Set staking season period (admin function)"
+      ],
+      "discriminator": [
+        8,
+        199,
+        253,
+        28,
+        90,
+        92,
+        54,
+        154
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "factory"
+          ]
+        },
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "staking_program",
+          "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ"
+        }
+      ],
+      "args": [
+        {
+          "name": "period",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "stake_sol",
+      "docs": [
+        "Stake SOL – factory holds funds, staking manages state"
+      ],
+      "discriminator": [
+        200,
+        38,
+        157,
+        155,
+        245,
+        57,
+        236,
+        168
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_sol",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staking.current_stake_season",
+                "account": "Staking"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "staker_record",
+          "writable": true
+        },
+        {
+          "name": "staking_program",
+          "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "stake_token",
+      "docs": [
+        "Stake tokens – factory holds funds, staking manages state"
+      ],
+      "discriminator": [
+        191,
+        127,
+        193,
+        101,
+        37,
+        96,
+        87,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staking.current_stake_season",
+                "account": "Staking"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "staker_record",
+          "writable": true
+        },
+        {
+          "name": "user_token_account",
+          "writable": true
+        },
+        {
+          "name": "vault_token_account",
+          "writable": true
+        },
+        {
+          "name": "staking_program",
+          "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "start_stake_season",
+      "docs": [
+        "Start a new stake season (admin function)"
+      ],
+      "discriminator": [
+        206,
+        139,
+        170,
+        171,
+        72,
+        36,
+        232,
+        138
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "factory"
+          ]
+        },
+        {
+          "name": "staking_program",
+          "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ"
+        },
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "current_stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staking.current_stake_season",
+                "account": "Staking"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "next_stake_season",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "next_season_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "unstake_sol",
+      "docs": [
+        "Unstake SOL – factory sends funds, staking updates state"
+      ],
+      "discriminator": [
+        70,
+        150,
+        140,
+        208,
+        166,
+        13,
+        252,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_sol",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staking.current_stake_season",
+                "account": "Staking"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "staker_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staker"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "staker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "staking_program",
+          "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "unstake_token",
+      "docs": [
+        "Unstake tokens – factory sends funds, staking updates state"
+      ],
+      "discriminator": [
+        165,
+        130,
+        39,
+        20,
+        80,
+        43,
+        116,
+        186
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "staking_program",
+          "address": "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ"
+        },
+        {
+          "name": "staking",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  105,
+                  110,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "stake_season",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  95,
+                  115,
+                  101,
+                  97,
+                  115,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staking.current_stake_season",
+                "account": "Staking"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "staker_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "staker"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                204,
+                88,
+                152,
+                88,
+                138,
+                211,
+                130,
+                183,
+                24,
+                214,
+                254,
+                7,
+                118,
+                116,
+                211,
+                169,
+                140,
+                83,
+                199,
+                78,
+                164,
+                162,
+                47,
+                80,
+                93,
+                198,
+                166,
+                91,
+                140,
+                69,
+                91,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "staker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "recipient_token_account",
+          "writable": true
+        },
+        {
+          "name": "vault_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw",
+      "docs": [
+        "Withdraw from a mixer pool – factory sends funds, mixer validates state (CPI)"
+      ],
+      "discriminator": [
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
+        161,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_sol",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token_account",
+          "writable": true
+        },
+        {
+          "name": "mixer_pool"
+        },
+        {
+          "name": "mixer_config"
+        },
+        {
+          "name": "merkle_tree",
+          "writable": true
+        },
+        {
+          "name": "nullifier_hash_checker",
+          "writable": true
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "recipient_token_account",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "mixer_program",
+          "address": "CGZ8t3ZgSnEkN5zbVsAJ21d5bu9vrsBvBh7xxnZZcrVu"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "instruction_data",
+          "type": "bytes"
+        },
+        {
+          "name": "nullifier_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Factory",
+      "discriminator": [
+        159,
+        68,
+        192,
+        61,
+        48,
+        249,
+        216,
+        202
+      ]
+    },
+    {
+      "name": "MixerPool",
+      "discriminator": [
+        125,
+        154,
+        206,
+        245,
+        90,
+        148,
+        241,
+        66
+      ]
+    },
+    {
+      "name": "StakeSeason",
+      "discriminator": [
+        248,
+        16,
+        246,
+        183,
+        42,
+        157,
+        19,
+        231
+      ]
+    },
+    {
+      "name": "StakerRecord",
+      "discriminator": [
+        32,
+        233,
+        136,
+        62,
+        39,
+        209,
+        227,
+        86
+      ]
+    },
+    {
+      "name": "Staking",
+      "discriminator": [
+        242,
+        134,
+        183,
+        223,
+        18,
+        13,
+        184,
+        23
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "FeeRateUpdated",
+      "discriminator": [
+        90,
+        28,
+        42,
+        224,
+        39,
+        78,
+        81,
+        27
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidMode",
+      "msg": "Invalid mode. Must be 0 (SOL) or 1 (TOKEN)"
+    },
+    {
+      "code": 6001,
+      "name": "MixerAlreadyExists",
+      "msg": "Mixer already exists for this mode and amount"
+    },
+    {
+      "code": 6002,
+      "name": "MixerNotDeployed",
+      "msg": "Mixer not deployed for this mode and amount"
+    },
+    {
+      "code": 6003,
+      "name": "InsufficientSolDeposit",
+      "msg": "Insufficient SOL deposit"
+    },
+    {
+      "code": 6004,
+      "name": "InsufficientTokenBalance",
+      "msg": "Insufficient token balance"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6006,
+      "name": "FeeRateTooHigh",
+      "msg": "Fee rate cannot exceed 5%"
+    },
+    {
+      "code": 6007,
+      "name": "Unauthorized",
+      "msg": "Unauthorized: Only operator can call this"
+    },
+    {
+      "code": 6008,
+      "name": "SameValue",
+      "msg": "New value must not be same with current value"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidSeasonId",
+      "msg": "Invalid season ID"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidRecipient",
+      "msg": "Recipient address from proof does not match provided recipient account"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidVaultAccount",
+      "msg": "Invalid vault account. Vault account does not match factory configuration"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidTokenMint",
+      "msg": "Invalid token mint. Only the factory's configured token can be used"
+    },
+    {
+      "code": 6013,
+      "name": "ArithmeticError",
+      "msg": "Arithmetic error"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidOwnerAccount",
+      "msg": "Invalid owner account"
+    }
+  ],
+  "types": [
+    {
+      "name": "Factory",
+      "docs": [
+        "Global factory config (single instance)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_rate",
+            "type": "u64"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "staking_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_sol",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_token_account",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeeRateUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_fee_rate",
+            "type": "u64"
+          },
+          {
+            "name": "new_fee_rate",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MixerPool",
+      "docs": [
+        "Mixer pool describing a fixed (mode, amount) route, mirroring mixers[mode][amount]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mode",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "mixer_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "mixer_config",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StakeSeason",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "season_id",
+            "type": "u64"
+          },
+          {
+            "name": "start_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "end_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "staking_season_period",
+            "type": "u64"
+          },
+          {
+            "name": "total_staked_sol_amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_staked_token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_reward_sol_amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_reward_token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_sol_weight_value",
+            "type": "u64"
+          },
+          {
+            "name": "total_token_weight_value",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StakerRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sol_staked_season_id",
+            "type": "u64"
+          },
+          {
+            "name": "token_staked_season_id",
+            "type": "u64"
+          },
+          {
+            "name": "sol_staked_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "token_staked_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "staked_sol_amount",
+            "type": "u64"
+          },
+          {
+            "name": "staked_token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "sol_weight_value",
+            "type": "u64"
+          },
+          {
+            "name": "token_weight_value",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Staking",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "staking_season_period",
+            "type": "u64"
+          },
+          {
+            "name": "current_stake_season",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}
