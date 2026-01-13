@@ -156,9 +156,9 @@ async function testSolanaViewFunctions(
     try {
       const stakerRecord = await sdk.getStakerRecord(userAddress.toString());
       console.log(`✓ Staker record found:`);
-      const stakedSol = Number(stakerRecord.stakedEthAmount) / 1_000_000_000;
+      const stakedSol = Number(stakerRecord.stakedSolAmount) / 1_000_000_000;
       console.log(`  - Staked SOL: ${stakedSol.toFixed(9)} SOL`);
-      console.log(`  - SOL Weight: ${stakerRecord.ethWeightValue.toString()}`);
+      console.log(`  - SOL Weight: ${stakerRecord.solWeightValue.toString()}`);
     } catch (error: any) {
       console.log(`⚠ No staker record found: ${error.message}`);
     }
@@ -225,6 +225,52 @@ async function testSolanaDeposit(sdk: AintiVirusSolana, amount: bigint) {
   }
 }
 
+async function testSolanaStartStakeSeason(sdk: AintiVirusSolana) {
+  console.log("\n=== Testing Solana Start Stake Season ===");
+
+  try {
+    // Get current stake season
+    let currentSeason: bigint;
+    try {
+      currentSeason = await sdk.getCurrentStakeSeason();
+      console.log(`✓ Current stake season: ${currentSeason.toString()}`);
+    } catch (error: any) {
+      // If no current season exists, start with season 1
+      console.log(`⚠ No current stake season found, starting with season 1`);
+      currentSeason = 0n;
+    }
+
+    // Calculate next season ID
+    const nextSeasonId = currentSeason + 1n;
+    console.log(`Starting stake season ${nextSeasonId.toString()}...`);
+
+    const result = await sdk.startStakeSeason(nextSeasonId);
+    await new Promise((resolve) => setTimeout(resolve, 10000));
+    console.log(`✓ Start stake season successful!`);
+    console.log(`  Transaction Signature: ${result.txHash}`);
+    console.log(`  Next Season ID: ${nextSeasonId.toString()}`);
+
+    // Verify the new season was created
+    try {
+      const newSeason = await sdk.getStakeSeason(nextSeasonId);
+      console.log(`✓ Verified new stake season:`);
+      console.log(`  - Season ID: ${newSeason.seasonId.toString()}`);
+      console.log(
+        `  - Start Timestamp: ${newSeason.startTimestamp.toString()}`
+      );
+    } catch (error: any) {
+      console.log(error);
+      console.log(`⚠ Could not verify new stake season: ${error.message}`);
+    }
+  } catch (error: any) {
+    console.error(`✗ Solana start stake season error: ${error.message}`);
+    if (error.logs) {
+      console.error(`  Logs:`, error.logs);
+    }
+    throw error;
+  }
+}
+
 async function testSolanaStaking(sdk: AintiVirusSolana, amount: bigint) {
   console.log("\n=== Testing Solana Staking ===");
 
@@ -241,9 +287,9 @@ async function testSolanaStaking(sdk: AintiVirusSolana, amount: bigint) {
     const userAddress = sdk["wallet"].publicKey;
     const stakerRecord = await sdk.getStakerRecord(userAddress.toString());
     console.log(`✓ Updated staker record:`);
-    const stakedSol = Number(stakerRecord.stakedEthAmount) / 1_000_000_000;
+    const stakedSol = Number(stakerRecord.stakedSolAmount) / 1_000_000_000;
     console.log(`  - Staked SOL: ${stakedSol.toFixed(9)} SOL`);
-    console.log(`  - SOL Weight: ${stakerRecord.ethWeightValue.toString()}`);
+    console.log(`  - SOL Weight: ${stakerRecord.solWeightValue.toString()}`);
   } catch (error: any) {
     console.error(`✗ Solana staking error: ${error.message}`);
     if (error.logs) {
@@ -251,7 +297,7 @@ async function testSolanaStaking(sdk: AintiVirusSolana, amount: bigint) {
     }
     if (error.message.includes("InstructionFallbackNotFound")) {
       console.error(
-        `  ⚠ The instruction name 'stakeEther' may not match the program.`
+        `  ⚠ The instruction name 'stakeSol' may not match the program.`
       );
       console.error(
         `  The program might use a different instruction name (e.g., 'stakeSol', 'stake').`
@@ -259,6 +305,63 @@ async function testSolanaStaking(sdk: AintiVirusSolana, amount: bigint) {
       console.error(
         `  To fix: Update the SDK with the correct instruction name from the IDL.`
       );
+    }
+    throw error;
+  }
+}
+
+async function testSolanaUnstake(sdk: AintiVirusSolana) {
+  console.log("\n=== Testing Solana Unstake ===");
+
+  try {
+    // Get staker record before unstaking
+    const userAddress = sdk["wallet"].publicKey;
+    let stakerRecordBefore;
+    try {
+      stakerRecordBefore = await sdk.getStakerRecord(userAddress.toString());
+      const stakedSolBefore =
+        Number(stakerRecordBefore.stakedSolAmount) / 1_000_000_000;
+      console.log(`Current staker record before unstaking:`);
+      console.log(`  - Staked SOL: ${stakedSolBefore.toFixed(9)} SOL`);
+      console.log(
+        `  - SOL Weight: ${stakerRecordBefore.solWeightValue.toString()}`
+      );
+
+      if (stakedSolBefore === 0) {
+        console.log(`⚠ No SOL staked. Skipping unstake test.`);
+        return;
+      }
+    } catch (error: any) {
+      console.log(`⚠ No staker record found. Skipping unstake test.`);
+      return;
+    }
+
+    console.log(`Unstaking SOL...`);
+
+    const result = await sdk.unstakeSol();
+
+    console.log(`✓ Unstaking successful!`);
+    console.log(`  Transaction Signature: ${result.txHash}`);
+
+    // Get updated staker record
+    try {
+      const stakerRecordAfter = await sdk.getStakerRecord(
+        userAddress.toString()
+      );
+      console.log(`✓ Updated staker record:`);
+      const stakedSolAfter =
+        Number(stakerRecordAfter.stakedSolAmount) / 1_000_000_000;
+      console.log(`  - Staked SOL: ${stakedSolAfter.toFixed(9)} SOL`);
+      console.log(
+        `  - SOL Weight: ${stakerRecordAfter.solWeightValue.toString()}`
+      );
+    } catch (error: any) {
+      console.log(`⚠ Could not fetch updated staker record: ${error.message}`);
+    }
+  } catch (error: any) {
+    console.error(`✗ Solana unstake error: ${error.message}`);
+    if (error.logs) {
+      console.error(`  Logs:`, error.logs);
     }
     throw error;
   }
@@ -402,13 +505,6 @@ async function main() {
       Number(EXPECTED_FEE_RATE) / 10000
     }%)`
   );
-  console.log("\n⚠ NOTE: This test uses a minimal IDL.");
-  console.log("  Some tests may fail if:");
-  console.log("  - Factory account is not initialized");
-  console.log("  - Instruction names don't match the program");
-  console.log("  - Required accounts are missing from the IDL");
-  console.log("  To fix: Provide the actual IDL or fetch it from the chain.");
-  console.log("=========================================\n");
 
   try {
     // Connect to Solana devnet
@@ -499,7 +595,7 @@ async function main() {
 
       // Get the token mint from the factory account
       const factoryAccount = await solanaSdk.getFactoryAccount();
-      tokenMint = (factoryAccount as any).mint as PublicKey;
+      tokenMint = factoryAccount.mint as PublicKey;
       console.log(`✓ Using existing token mint: ${tokenMint.toString()}\n`);
     } catch (error: any) {
       if (
@@ -593,12 +689,20 @@ async function main() {
         fn: () => testSolanaDeposit(solanaSdk, solAmount),
       },
       {
+        name: "Start Stake Season",
+        fn: () => testSolanaStartStakeSeason(solanaSdk),
+      },
+      {
         name: "Staking (0.05 SOL)",
         fn: () => testSolanaStaking(solanaSdk, solAmount),
       },
       {
         name: "Claim Rewards",
         fn: () => testSolanaClaimRewards(solanaSdk),
+      },
+      {
+        name: "Unstake SOL",
+        fn: () => testSolanaUnstake(solanaSdk),
       },
     ];
 

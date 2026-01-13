@@ -3,8 +3,8 @@ import {
   AssetMode,
   WithdrawalProof,
   TransactionResult,
-  StakeSeason,
-  StakerRecord,
+  EVMStakeSeason,
+  EVMStakerRecord,
 } from "../types";
 import { bigIntToBytes32 } from "../utils/crypto";
 
@@ -371,34 +371,59 @@ export class AintiVirusEVM {
   }
 
   /**
+   * Start a new stake season
+   */
+  async startStakeSeason(): Promise<TransactionResult> {
+    if (!this.signer) {
+      throw new Error("Signer required for transactions");
+    }
+
+    const tx = await this.factory.startStakeSeason();
+    const receipt = await tx.wait();
+
+    return {
+      txHash: receipt.hash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
    * Get stake season information
    */
-  async getStakeSeason(seasonId: bigint): Promise<StakeSeason> {
-    const stakingAddress = await this.getStakingAddress();
-    const staking = new Contract(
-      stakingAddress,
-      AintiVirusEVM.STAKING_ABI,
-      this.provider
-    );
+  async getStakeSeason(seasonId: bigint): Promise<EVMStakeSeason> {
+    try {
+      const stakingAddress = await this.getStakingAddress();
+      const staking = new Contract(
+        stakingAddress,
+        AintiVirusEVM.STAKING_ABI,
+        this.provider
+      );
 
-    const season = await staking.stakeSeasons(seasonId);
-    return {
-      seasonId: season.seasonId,
-      startTimestamp: season.startTimestamp,
-      endTimestamp: season.endTimestamp,
-      totalStakedEthAmount: season.totalStakedEthAmount,
-      totalStakedTokenAmount: season.totalStakedTokenAmount,
-      totalRewardEthAmount: season.totalRewardEthAmount,
-      totalRewardTokenAmount: season.totalRewardTokenAmount,
-      totalEthWeightValue: season.totalEthWeightValue,
-      totalTokenWeightValue: season.totalTokenWeightValue,
-    };
+      const season = await staking.stakeSeasons(seasonId);
+      return {
+        seasonId: season.seasonId,
+        startTimestamp: season.startTimestamp,
+        endTimestamp: season.endTimestamp,
+        totalStakedEthAmount: season.totalStakedEthAmount,
+        totalStakedTokenAmount: season.totalStakedTokenAmount,
+        totalRewardEthAmount: season.totalRewardEthAmount,
+        totalRewardTokenAmount: season.totalRewardTokenAmount,
+        totalEthWeightValue: season.totalEthWeightValue,
+        totalTokenWeightValue: season.totalTokenWeightValue,
+      };
+    } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Stake season ${seasonId} not found. Original error: ${errorMsg}`
+      );
+    }
   }
 
   /**
    * Get staker record
    */
-  async getStakerRecord(address: string): Promise<StakerRecord> {
+  async getStakerRecord(address: string): Promise<EVMStakerRecord> {
     const stakingAddress = await this.getStakingAddress();
     const staking = new Contract(
       stakingAddress,

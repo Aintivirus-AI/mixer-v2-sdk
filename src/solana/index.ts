@@ -8,8 +8,8 @@ import {
 import {
   AssetMode,
   TransactionResult,
-  StakeSeason,
-  StakerRecord,
+  SolanaStakeSeason,
+  SolanaStakerRecord,
 } from "../types";
 import factoryIdlJson from "./idl/aintivirus_factory.json";
 import mixerIdlJson from "./idl/aintivirus_mixer.json";
@@ -448,29 +448,18 @@ export class AintiVirusSolana {
     const [nullifierHashCheckerPda] =
       this.getNullifierHashCheckerPda(nullifierHashBytes);
 
-    const accounts: any = {
-      // factory, vault_sol, mixer_program, token_program, system_program are auto-populated
-      vault_token_account: vaultSolPda, // Will be set correctly for token mode
-      mixer_pool: mixerPoolPda,
-      mixer_config: mixerConfigPda,
-      merkle_tree: merkleTreePda,
-      nullifier_hash_checker: nullifierHashCheckerPda,
-      recipient: recipientPubkey,
-      payer: this.wallet.publicKey,
-    };
-
+    let recipientTokenAccount: PublicKey | null = null;
+    let vaultTokenAccount: PublicKey | null = null;
     if (mode === AssetMode.TOKEN && this.tokenMint) {
-      const recipientTokenAccount = await getAssociatedTokenAddress(
+      recipientTokenAccount = await getAssociatedTokenAddress(
         this.tokenMint,
         recipientPubkey
       );
-      const vaultTokenAccount = await getAssociatedTokenAddress(
+      vaultTokenAccount = await getAssociatedTokenAddress(
         this.tokenMint,
         factoryPda,
         true
       );
-      accounts.vault_token_account = vaultTokenAccount;
-      accounts.recipient_token_account = recipientTokenAccount;
     }
 
     const tx = await this.factoryProgram.methods
@@ -480,7 +469,16 @@ export class AintiVirusSolana {
         instructionData, // Buffer type
         Array.from(nullifierHashBytes)
       )
-      .accounts(accounts)
+      .accounts({
+        mixerPool: mixerPoolPda,
+        mixerConfig: mixerConfigPda,
+        merkleTree: merkleTreePda,
+        nullifierHashChecker: nullifierHashCheckerPda,
+        recipient: recipientPubkey,
+        payer: this.wallet.publicKey,
+        vaultTokenAccount: vaultTokenAccount as PublicKey,
+        recipientTokenAccount: recipientTokenAccount,
+      })
       .rpc();
 
     const signature = tx;
@@ -503,8 +501,8 @@ export class AintiVirusSolana {
     const tx = await this.factoryProgram.methods
       .stakeSol(new anchor.BN(amount.toString()))
       .accounts({
-        user: this.wallet.publicKey,
         stakerRecord: stakerRecordPda,
+        user: this.wallet.publicKey,
       })
       .rpc();
 
@@ -545,10 +543,10 @@ export class AintiVirusSolana {
       .accounts({
         // factory, staking, stake_season, staking_program, token_program, system_program are auto-populated
         user: this.wallet.publicKey,
-        staker_record: stakerRecordPda,
-        user_token_account: userTokenAccount,
-        vault_token_account: vaultTokenAccount,
-      } as any)
+        stakerRecord: stakerRecordPda,
+        userTokenAccount: userTokenAccount,
+        vaultTokenAccount: vaultTokenAccount,
+      })
       .rpc();
 
     const signature = tx;
@@ -566,7 +564,6 @@ export class AintiVirusSolana {
    * Claim SOL rewards
    */
   async claimSol(seasonId: bigint): Promise<TransactionResult> {
-    const [stakerRecordPda] = this.getStakerRecordPda(this.wallet.publicKey);
     const [seasonClaimedPda] = this.getSeasonClaimedPda(
       this.wallet.publicKey,
       seasonId
@@ -576,10 +573,9 @@ export class AintiVirusSolana {
       .claimSol(new anchor.BN(seasonId.toString()))
       .accounts({
         // factory, vault_sol, staking, stake_season, staking_program, system_program are auto-populated
-        staker_record: stakerRecordPda,
-        season_claimed: seasonClaimedPda,
+        seasonClaimed: seasonClaimedPda,
         staker: this.wallet.publicKey,
-      } as any)
+      })
       .rpc();
 
     const signature = tx;
@@ -623,12 +619,11 @@ export class AintiVirusSolana {
       .claimToken(new anchor.BN(seasonId.toString()))
       .accounts({
         // factory, staking, stake_season, staking_program, token_program, system_program are auto-populated
-        staker_record: stakerRecordPda,
-        season_claimed: seasonClaimedPda,
+        seasonClaimed: seasonClaimedPda,
         staker: this.wallet.publicKey,
-        vault_token_account: vaultTokenAccount,
-        staker_token_account: stakerTokenAccount,
-      } as any)
+        vaultTokenAccount: vaultTokenAccount,
+        stakerTokenAccount: stakerTokenAccount,
+      })
       .rpc();
 
     const signature = tx;
@@ -646,15 +641,11 @@ export class AintiVirusSolana {
    * Unstake SOL
    */
   async unstakeSol(): Promise<TransactionResult> {
-    const [stakerRecordPda] = this.getStakerRecordPda(this.wallet.publicKey);
-
     const tx = await this.factoryProgram.methods
       .unstakeSol()
       .accounts({
-        // factory, vault_sol, staking, stake_season, staking_program, system_program are auto-populated
-        staker_record: stakerRecordPda,
         staker: this.wallet.publicKey,
-      } as any)
+      })
       .rpc();
 
     const signature = tx;
@@ -678,9 +669,6 @@ export class AintiVirusSolana {
 
     const [factoryPda] = this.getFactoryPda();
 
-    // Get current stake season from staking account
-    const [stakerRecordPda] = this.getStakerRecordPda(this.wallet.publicKey);
-
     const recipientTokenAccount = await getAssociatedTokenAddress(
       this.tokenMint,
       this.wallet.publicKey
@@ -694,12 +682,10 @@ export class AintiVirusSolana {
     const tx = await this.factoryProgram.methods
       .unstakeToken()
       .accounts({
-        // factory, staking_program, staking, stake_season, token_program, system_program are auto-populated
-        staker_record: stakerRecordPda,
         staker: this.wallet.publicKey,
-        recipient_token_account: recipientTokenAccount,
-        vault_token_account: vaultTokenAccount,
-      } as any)
+        recipientTokenAccount: recipientTokenAccount,
+        vaultTokenAccount: vaultTokenAccount,
+      })
       .rpc();
 
     const signature = tx;
@@ -781,10 +767,9 @@ export class AintiVirusSolana {
     const tx = await this.factoryProgram.methods
       .initializeFactory(new anchor.BN(feeRate.toString()))
       .accounts({
-        // factory, authority, vault_sol, token_program, staking_program, system_program are auto-populated
-        vault_token_account: vaultTokenAccount,
+        vaultTokenAccount: vaultTokenAccount,
         mint: tokenMint,
-      } as any)
+      })
       .rpc();
 
     const slot = await this.connection.getSlot();
@@ -803,40 +788,17 @@ export class AintiVirusSolana {
     mode: AssetMode,
     amount: bigint
   ): Promise<TransactionResult> {
-    const [factoryPda] = this.getFactoryPda();
     const [mixerPoolPda] = this.getMixerPoolPda(mode, amount);
     const [mixerConfigPda] = this.getMixerConfigPda(mode, amount);
     const [merkleTreePda] = this.getMerkleTreePda(mixerConfigPda);
 
-    const accounts: any = {
-      factory: factoryPda,
-      payer: this.wallet.publicKey,
-      mixerProgram: this.mixerProgram.programId,
-      mixerPool: mixerPoolPda,
-      mixerConfig: mixerConfigPda,
-      merkleTree: merkleTreePda,
-      systemProgram: SystemProgram.programId,
-    };
-
-    if (mode === AssetMode.TOKEN && this.tokenMint) {
-      const factoryTokenAccount = await getAssociatedTokenAddress(
-        this.tokenMint,
-        factoryPda,
-        true
-      );
-      accounts.tokenMint = this.tokenMint;
-      accounts.factoryTokenAccount = factoryTokenAccount;
-      accounts.tokenProgram = TOKEN_PROGRAM_ID;
-    }
-
     const tx = await this.factoryProgram.methods
       .deployMixer(mode, new anchor.BN(amount.toString()))
       .accounts({
-        // factory, authority, mixer_program, system_program are auto-populated
-        mixer_pool: mixerPoolPda,
-        mixer_config: mixerConfigPda,
-        merkle_tree: merkleTreePda,
-      } as any)
+        mixerPool: mixerPoolPda,
+        mixerConfig: mixerConfigPda,
+        merkleTree: merkleTreePda,
+      })
       .rpc();
 
     const signature = tx;
@@ -857,8 +819,8 @@ export class AintiVirusSolana {
     const tx = await this.factoryProgram.methods
       .setFeeRate(new anchor.BN(feeRate.toString()))
       .accounts({
-        // factory and authority are auto-populated
-      } as any)
+        authority: this.wallet.publicKey,
+      })
       .rpc();
 
     const signature = tx;
@@ -878,9 +840,7 @@ export class AintiVirusSolana {
   async setStakingSeasonPeriod(period: bigint): Promise<TransactionResult> {
     const tx = await this.factoryProgram.methods
       .setStakingSeasonPeriod(new anchor.BN(period.toString()))
-      .accounts({
-        // factory, authority, staking, staking_program are auto-populated
-      } as any)
+      .accounts({})
       .rpc();
 
     const signature = tx;
@@ -898,45 +858,13 @@ export class AintiVirusSolana {
    * Start stake season (admin function)
    */
   async startStakeSeason(nextSeasonId: bigint): Promise<TransactionResult> {
-    const [stakingPda] = this.getStakingPda();
-
-    // Get current stake season from staking account
-    let stakingAccount: any;
-    try {
-      stakingAccount = await this.stakingProgram.account.staking.fetch(
-        stakingPda
-      );
-    } catch (error: any) {
-      const errorMsg = error?.message || String(error);
-      if (errorMsg.includes("array")) {
-        throw new Error(
-          `Failed to deserialize staking account. This may indicate an IDL type mismatch. ` +
-            `Original error: ${errorMsg}. ` +
-            `Try checking if the account structure matches the IDL definition.`
-        );
-      }
-      throw error;
-    }
-
-    if (!stakingAccount || !(stakingAccount as any).currentStakeSeason) {
-      throw new Error(
-        "Staking account data is invalid or missing currentStakeSeason"
-      );
-    }
-
-    const currentSeasonId = BigInt(
-      (stakingAccount as any).currentStakeSeason.toString()
-    );
-    const [currentStakeSeasonPda] = this.getStakeSeasonPda(currentSeasonId);
     const [nextStakeSeasonPda] = this.getStakeSeasonPda(nextSeasonId);
 
     const tx = await this.factoryProgram.methods
       .startStakeSeason(new anchor.BN(nextSeasonId.toString()))
       .accounts({
-        // factory, authority, staking_program, staking, system_program are auto-populated
-        current_stake_season: currentStakeSeasonPda,
-        next_stake_season: nextStakeSeasonPda,
-      } as any)
+        nextStakeSeason: nextStakeSeasonPda as PublicKey,
+      })
       .rpc();
 
     const signature = tx;
@@ -970,7 +898,7 @@ export class AintiVirusSolana {
       }
       throw error;
     }
-    const feeRateValue = (factoryAccount as any).feeRate;
+    const feeRateValue = factoryAccount.feeRate;
 
     const feeRate = feeRateValue ? BigInt(feeRateValue.toString()) : 0n;
 
@@ -1013,56 +941,49 @@ export class AintiVirusSolana {
   /**
    * Get stake season information
    */
-  async getStakeSeason(seasonId: bigint): Promise<StakeSeason> {
+  async getStakeSeason(seasonId: bigint): Promise<SolanaStakeSeason> {
     // Fetch stake season from staking program
-    const seasonPda = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("stake_season"),
-        new anchor.BN(seasonId.toString()).toArrayLike(Buffer, "be", 8),
-      ],
-      this.stakingProgram.programId
-    )[0];
+    const [seasonPda] = this.getStakeSeasonPda(seasonId);
 
     try {
-      const seasonAccount = await (
-        this.stakingProgram.account as any
-      ).stakeSeason.fetch(seasonPda);
+      const seasonAccount = await this.stakingProgram.account.stakeSeason.fetch(
+        seasonPda
+      );
       return {
-        seasonId: BigInt((seasonAccount as any).seasonId?.toString() || "0"),
-        startTimestamp: BigInt(
-          (seasonAccount as any).startTimestamp?.toString() || "0"
-        ),
-        endTimestamp: BigInt(
-          (seasonAccount as any).endTimestamp?.toString() || "0"
-        ),
-        totalStakedEthAmount: BigInt(
-          (seasonAccount as any).totalStakedEthAmount?.toString() || "0"
+        seasonId: BigInt(seasonAccount.seasonId?.toString() || "0"),
+        startTimestamp: BigInt(seasonAccount.startTimestamp?.toString() || "0"),
+        endTimestamp: BigInt(seasonAccount.endTimestamp?.toString() || "0"),
+        totalStakedSolAmount: BigInt(
+          seasonAccount.totalStakedSolAmount?.toString() || "0"
         ),
         totalStakedTokenAmount: BigInt(
-          (seasonAccount as any).totalStakedTokenAmount?.toString() || "0"
+          seasonAccount.totalStakedTokenAmount?.toString() || "0"
         ),
-        totalRewardEthAmount: BigInt(
-          (seasonAccount as any).totalRewardEthAmount?.toString() || "0"
+        totalRewardSolAmount: BigInt(
+          seasonAccount.totalRewardSolAmount?.toString() || "0"
         ),
         totalRewardTokenAmount: BigInt(
-          (seasonAccount as any).totalRewardTokenAmount?.toString() || "0"
+          seasonAccount.totalRewardTokenAmount?.toString() || "0"
         ),
-        totalEthWeightValue: BigInt(
-          (seasonAccount as any).totalEthWeightValue?.toString() || "0"
+        totalSolWeightValue: BigInt(
+          seasonAccount.totalSolWeightValue?.toString() || "0"
         ),
         totalTokenWeightValue: BigInt(
-          (seasonAccount as any).totalTokenWeightValue?.toString() || "0"
+          seasonAccount.totalTokenWeightValue?.toString() || "0"
         ),
       };
-    } catch {
-      throw new Error(`Stake season ${seasonId} not found`);
+    } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Stake season ${seasonId} not found. Original error: ${errorMsg}`
+      );
     }
   }
 
   /**
    * Get staker record
    */
-  async getStakerRecord(address: string): Promise<StakerRecord> {
+  async getStakerRecord(address: string): Promise<SolanaStakerRecord> {
     const stakerPubkey = new PublicKey(address);
     const stakerRecordPda = PublicKey.findProgramAddressSync(
       [Buffer.from("staker_record"), stakerPubkey.toBuffer()],
@@ -1070,33 +991,31 @@ export class AintiVirusSolana {
     )[0];
 
     try {
-      const stakerRecord = await (
-        this.stakingProgram.account as any
-      ).stakerRecord.fetch(stakerRecordPda);
+      const stakerRecord = await this.stakingProgram.account.stakerRecord.fetch(
+        stakerRecordPda
+      );
       return {
-        ethStakedSeasonId: BigInt(
-          (stakerRecord as any).ethStakedSeasonId?.toString() || "0"
+        solStakedSeasonId: BigInt(
+          stakerRecord.solStakedSeasonId?.toString() || "0"
         ),
         tokenStakedSeasonId: BigInt(
-          (stakerRecord as any).tokenStakedSeasonId?.toString() || "0"
+          stakerRecord.tokenStakedSeasonId?.toString() || "0"
         ),
-        ethStakedTimestamp: BigInt(
-          (stakerRecord as any).ethStakedTimestamp?.toString() || "0"
+        solStakedTimestamp: BigInt(
+          stakerRecord.solStakedTimestamp?.toString() || "0"
         ),
         tokenStakedTimestamp: BigInt(
-          (stakerRecord as any).tokenStakedTimestamp?.toString() || "0"
+          stakerRecord.tokenStakedTimestamp?.toString() || "0"
         ),
-        stakedEthAmount: BigInt(
-          (stakerRecord as any).stakedEthAmount?.toString() || "0"
+        stakedSolAmount: BigInt(
+          stakerRecord.stakedSolAmount?.toString() || "0"
         ),
         stakedTokenAmount: BigInt(
-          (stakerRecord as any).stakedTokenAmount?.toString() || "0"
+          stakerRecord.stakedTokenAmount?.toString() || "0"
         ),
-        ethWeightValue: BigInt(
-          (stakerRecord as any).ethWeightValue?.toString() || "0"
-        ),
+        solWeightValue: BigInt(stakerRecord.solWeightValue?.toString() || "0"),
         tokenWeightValue: BigInt(
-          (stakerRecord as any).tokenWeightValue?.toString() || "0"
+          stakerRecord.tokenWeightValue?.toString() || "0"
         ),
       };
     } catch {
@@ -1123,9 +1042,9 @@ export class AintiVirusSolana {
    */
   async getStakingAddress(): Promise<PublicKey> {
     const [factoryPda] = this.getFactoryPda();
-    const factoryAccount = await (
-      this.factoryProgram.account as any
-    ).factory.fetch(factoryPda);
-    return (factoryAccount as any).stakingProgram as PublicKey;
+    const factoryAccount = await this.factoryProgram.account.factory.fetch(
+      factoryPda
+    );
+    return factoryAccount.stakingProgram as PublicKey;
   }
 }

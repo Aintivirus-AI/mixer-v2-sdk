@@ -37,9 +37,38 @@ export interface DepositData {
 }
 
 /**
- * Staking season information
+ * Staking season information for Solana
  */
-export interface StakeSeason {
+export interface SolanaStakeSeason {
+  seasonId: bigint;
+  startTimestamp: bigint;
+  endTimestamp: bigint;
+  totalStakedSolAmount: bigint;
+  totalStakedTokenAmount: bigint;
+  totalRewardSolAmount: bigint;
+  totalRewardTokenAmount: bigint;
+  totalSolWeightValue: bigint;
+  totalTokenWeightValue: bigint;
+}
+
+/**
+ * Staker record information for Solana
+ */
+export interface SolanaStakerRecord {
+  solStakedSeasonId: bigint;
+  tokenStakedSeasonId: bigint;
+  solStakedTimestamp: bigint;
+  tokenStakedTimestamp: bigint;
+  stakedSolAmount: bigint;
+  stakedTokenAmount: bigint;
+  solWeightValue: bigint;
+  tokenWeightValue: bigint;
+}
+
+/**
+ * Staking season information for EVM
+ */
+export interface EVMStakeSeason {
   seasonId: bigint;
   startTimestamp: bigint;
   endTimestamp: bigint;
@@ -52,9 +81,9 @@ export interface StakeSeason {
 }
 
 /**
- * Staker record information
+ * Staker record information for EVM
  */
-export interface StakerRecord {
+export interface EVMStakerRecord {
   ethStakedSeasonId: bigint;
   tokenStakedSeasonId: bigint;
   ethStakedTimestamp: bigint;
@@ -64,6 +93,18 @@ export interface StakerRecord {
   ethWeightValue: bigint;
   tokenWeightValue: bigint;
 }
+
+/**
+ * Staking season information (union type for backward compatibility)
+ * @deprecated Use SolanaStakeSeason or EVMStakeSeason instead
+ */
+export type StakeSeason = SolanaStakeSeason | EVMStakeSeason;
+
+/**
+ * Staker record information (union type for backward compatibility)
+ * @deprecated Use SolanaStakerRecord or EVMStakerRecord instead
+ */
+export type StakerRecord = SolanaStakerRecord | EVMStakerRecord;
 
 /**
  * Configuration for SDK initialization

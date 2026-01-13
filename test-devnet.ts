@@ -17,15 +17,11 @@
 import { ethers } from "ethers";
 import {
   AintiVirusEVM,
-  AintiVirusSolana,
   AssetMode,
   generateSecretAndNullifier,
   computeCommitment,
 } from "./src";
 import { config } from "dotenv";
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
-import { Wallet } from "@coral-xyz/anchor";
-import * as anchor from "@coral-xyz/anchor";
 
 config();
 // ============================================
@@ -57,32 +53,6 @@ const EXPECTED_FEE_RATE = process.env.EXPECTED_FEE_RATE
 const PRIVATE_KEY =
   process.env.PRIVATE_KEY ||
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-
-// Enable/disable EVM tests (set to "false" to disable)
-const ENABLE_EVM_TESTS = process.env.ENABLE_EVM_TESTS !== "false";
-
-// ============================================
-// Solana Configuration
-// ============================================
-
-// Solana RPC URL (default: Solana devnet)
-const SOLANA_RPC_URL =
-  process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
-
-// Solana Program IDs
-const SOLANA_FACTORY_PROGRAM_ID =
-  process.env.SOLANA_FACTORY_PROGRAM_ID ||
-  "4LXpWrr1BFYkffdxYNnV7LhMT4ETYt38amAGRQZg2WoJ";
-const SOLANA_MIXER_PROGRAM_ID =
-  process.env.SOLANA_MIXER_PROGRAM_ID ||
-  "CGZ8t3ZgSnEkN5zbVsAJ21d5bu9vrsBvBh7xxnZZcrVu";
-const SOLANA_STAKING_PROGRAM_ID =
-  process.env.SOLANA_STAKING_PROGRAM_ID ||
-  "EkgXQkBQaG58wdtWQ2WAZWFhVFNjwffq5V3Zwk36GYbJ";
-
-// Solana wallet private key (base58 encoded or array format)
-// If not provided, will generate a new keypair (needs to be funded)
-const SOLANA_PRIVATE_KEY = process.env.SOLANA_PRIVATE_KEY;
 
 // ============================================
 // Test Functions
@@ -354,258 +324,113 @@ async function testClaimRewards(sdk: AintiVirusEVM) {
   }
 }
 
-// ============================================
-// Solana Test Functions
-// ============================================
-
-async function testSolanaViewFunctions(
-  sdk: AintiVirusSolana,
-  userAddress: PublicKey
-) {
-  console.log("\n=== Testing Solana View Functions ===");
+async function testStartStakeSeason(sdk: AintiVirusEVM) {
+  console.log("\n=== Testing Start Stake Season ===");
 
   try {
-    // Test fee rate
-    const feeRate = await sdk.getFeeRate();
-    const feeRatePercent = Number(feeRate) / 10000;
-    console.log(`✓ Fee Rate: ${feeRate.toString()} (${feeRatePercent}%)`);
-
-    // Verify expected fee rate
-    if (feeRate === EXPECTED_FEE_RATE) {
-      console.log(`  ✓ Fee rate matches expected value (${EXPECTED_FEE_RATE})`);
-    } else {
-      console.log(
-        `  ⚠ Fee rate differs from expected (expected: ${EXPECTED_FEE_RATE}, got: ${feeRate})`
-      );
-    }
-
-    // Test mixer existence for 0.05 SOL
-    const amount = 50_000_000n; // 0.05 SOL in lamports
-    const mixerExists = await sdk.mixerExists(AssetMode.ETH, amount);
-    console.log(`✓ Mixer exists for 0.05 SOL: ${mixerExists}`);
-
-    if (mixerExists) {
-      const mixerAddress = await sdk.getMixer(AssetMode.ETH, amount);
-      console.log(`✓ Mixer address: ${mixerAddress.toString()}`);
-    }
-
-    // Test deposit amount calculation
-    const depositAmount = await sdk.calculateDepositAmount(amount);
-    console.log(
-      `✓ Deposit amount (0.05 SOL + fees): ${
-        depositAmount / 1_000_000_000n
-      } SOL`
-    );
-
-    // Test staking address
+    // Get current stake season
+    let currentSeason: bigint;
     try {
-      const stakingAddress = await sdk.getStakingAddress();
-      console.log(`✓ Staking contract: ${stakingAddress.toString()}`);
-    } catch (error: any) {
-      console.log(`⚠ Could not get staking address: ${error.message}`);
-    }
-
-    // Test current season
-    try {
-      const currentSeason = await sdk.getCurrentStakeSeason();
+      currentSeason = await sdk.getCurrentStakeSeason();
       console.log(`✓ Current stake season: ${currentSeason.toString()}`);
     } catch (error: any) {
       console.log(`⚠ Could not get current season: ${error.message}`);
+      currentSeason = 0n;
     }
 
-    // Test balances
-    const solBalance = await sdk.getSolBalance(userAddress);
-    console.log(`✓ SOL Balance: ${solBalance / 1_000_000_000n} SOL`);
+    console.log(`Starting new stake season...`);
 
-    // Test staker record
+    const result = await sdk.startStakeSeason();
+
+    console.log(`✓ Start stake season successful!`);
+    console.log(`  Transaction Hash: ${result.txHash}`);
+    console.log(`  Block Number: ${result.blockNumber}`);
+
+    // Wait a bit for the new season to be available
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // Verify the new season was created
     try {
-      const stakerRecord = await sdk.getStakerRecord(userAddress.toString());
-      console.log(`✓ Staker record found:`);
+      const newSeasonId = currentSeason + 1n;
+      const newSeason = await sdk.getStakeSeason(newSeasonId);
+      console.log(`✓ Verified new stake season:`);
+      console.log(`  - Season ID: ${newSeason.seasonId.toString()}`);
       console.log(
-        `  - Staked SOL: ${stakerRecord.stakedEthAmount / 1_000_000_000n} SOL`
+        `  - Start Timestamp: ${newSeason.startTimestamp.toString()}`
       );
-      console.log(`  - SOL Weight: ${stakerRecord.ethWeightValue.toString()}`);
     } catch (error: any) {
-      console.log(`⚠ No staker record found: ${error.message}`);
+      console.log(`⚠ Could not verify new stake season: ${error.message}`);
     }
   } catch (error: any) {
-    console.error(`✗ Solana view function error: ${error.message}`);
+    console.error(`✗ Start stake season error: ${error.message}`);
+    if (error.data) {
+      console.error(`  Error data: ${error.data}`);
+    }
     throw error;
   }
 }
 
-async function testSolanaDeposit(sdk: AintiVirusSolana, amount: bigint) {
-  console.log("\n=== Testing Solana Deposit ===");
+async function testUnstake(sdk: AintiVirusEVM) {
+  console.log("\n=== Testing Unstake ===");
 
   try {
-    // Check if mixer exists
-    const exists = await sdk.mixerExists(AssetMode.ETH, amount);
-    if (!exists) {
-      console.log(
-        "⚠ Mixer not deployed for this amount. Skipping deposit test."
-      );
+    // Get staker record before unstaking
+    const signer = (sdk as any).signer;
+    if (!signer) {
+      console.log("⚠ No signer available. Skipping unstake test.");
       return;
     }
 
-    // Generate commitment
-    const { secret, nullifier } = generateSecretAndNullifier();
-    const commitment = computeCommitment(secret, nullifier);
-
-    console.log(`Generating deposit for ${amount / 1_000_000_000n} SOL...`);
-    console.log(`Commitment: ${commitment.toString()}`);
-    console.log(`Secret: ${secret.toString()}`);
-    console.log(`Nullifier: ${nullifier.toString()}`);
-
-    // Calculate total amount with fees
-    const totalAmount = await sdk.calculateDepositAmount(amount);
-    console.log(
-      `Total amount (with fees): ${totalAmount / 1_000_000_000n} SOL`
-    );
-
-    // Perform deposit
-    console.log("Sending deposit transaction...");
-    const result = await sdk.depositSol(amount, commitment);
-
-    console.log(`✓ Deposit successful!`);
-    console.log(`  Transaction Signature: ${result.txHash}`);
-    if (result.blockTime) {
-      console.log(
-        `  Block Time: ${new Date(
-          Number(result.blockTime) * 1000
-        ).toISOString()}`
+    const userAddress = await signer.getAddress();
+    let stakerRecordBefore;
+    try {
+      stakerRecordBefore = await sdk.getStakerRecord(userAddress);
+      const stakedEthBefore = ethers.formatEther(
+        stakerRecordBefore.stakedEthAmount
       );
+      console.log(`Current staker record before unstaking:`);
+      console.log(`  - Staked ETH: ${stakedEthBefore} ETH`);
+      console.log(
+        `  - ETH Weight: ${stakerRecordBefore.ethWeightValue.toString()}`
+      );
+
+      if (stakerRecordBefore.stakedEthAmount === 0n) {
+        console.log(`⚠ No ETH staked. Skipping unstake test.`);
+        return;
+      }
+    } catch (error: any) {
+      console.log(`⚠ No staker record found. Skipping unstake test.`);
+      return;
     }
 
-    // Store secret and nullifier for withdrawal
-    console.log("\n⚠ IMPORTANT: Store these values securely for withdrawal:");
-    console.log(`  Secret: ${secret.toString()}`);
-    console.log(`  Nullifier: ${nullifier.toString()}`);
+    console.log(`Unstaking ETH...`);
 
-    return { secret, nullifier, commitment };
-  } catch (error: any) {
-    console.error(`✗ Solana deposit error: ${error.message}`);
-    if (error.logs) {
-      console.error(`  Logs:`, error.logs);
-    }
-    throw error;
-  }
-}
+    const result = await sdk.unstakeEth();
 
-async function testSolanaStaking(sdk: AintiVirusSolana, amount: bigint) {
-  console.log("\n=== Testing Solana Staking ===");
-
-  try {
-    console.log(`Staking ${amount / 1_000_000_000n} SOL...`);
-
-    const result = await sdk.stakeSol(amount);
-
-    console.log(`✓ Staking successful!`);
-    console.log(`  Transaction Signature: ${result.txHash}`);
+    console.log(`✓ Unstaking successful!`);
+    console.log(`  Transaction Hash: ${result.txHash}`);
+    console.log(`  Block Number: ${result.blockNumber}`);
 
     // Get updated staker record
-    const userAddress = sdk["wallet"].publicKey;
-    const stakerRecord = await sdk.getStakerRecord(userAddress.toString());
-    console.log(`✓ Updated staker record:`);
-    console.log(
-      `  - Staked SOL: ${stakerRecord.stakedEthAmount / 1_000_000_000n} SOL`
-    );
-    console.log(`  - SOL Weight: ${stakerRecord.ethWeightValue.toString()}`);
+    try {
+      const stakerRecordAfter = await sdk.getStakerRecord(userAddress);
+      console.log(`✓ Updated staker record:`);
+      const stakedEthAfter = ethers.formatEther(
+        stakerRecordAfter.stakedEthAmount
+      );
+      console.log(`  - Staked ETH: ${stakedEthAfter} ETH`);
+      console.log(
+        `  - ETH Weight: ${stakerRecordAfter.ethWeightValue.toString()}`
+      );
+    } catch (error: any) {
+      console.log(`⚠ Could not fetch updated staker record: ${error.message}`);
+    }
   } catch (error: any) {
-    console.error(`✗ Solana staking error: ${error.message}`);
-    if (error.logs) {
-      console.error(`  Logs:`, error.logs);
+    console.error(`✗ Unstake error: ${error.message}`);
+    if (error.data) {
+      console.error(`  Error data: ${error.data}`);
     }
     throw error;
-  }
-}
-
-async function testSolanaDeployMixer(
-  sdk: AintiVirusSolana,
-  mode: AssetMode,
-  amount: bigint
-) {
-  console.log("\n=== Testing Solana Deploy Mixer ===");
-
-  try {
-    // Check if mixer already exists
-    const exists = await sdk.mixerExists(mode, amount);
-    if (exists) {
-      const mixerAddress = await sdk.getMixer(mode, amount);
-      console.log(`⚠ Mixer already exists at: ${mixerAddress.toString()}`);
-      return mixerAddress;
-    }
-
-    console.log(
-      `Deploying mixer for ${
-        mode === AssetMode.ETH ? "SOL" : "TOKEN"
-      } mode, amount: ${amount / 1_000_000_000n} SOL...`
-    );
-
-    const result = await sdk.deployMixer(mode, amount);
-
-    console.log(`✓ Mixer deployed successfully!`);
-    console.log(`  Transaction Signature: ${result.txHash}`);
-    if (result.blockTime) {
-      console.log(
-        `  Block Time: ${new Date(
-          Number(result.blockTime) * 1000
-        ).toISOString()}`
-      );
-    }
-
-    // Get the mixer address
-    const mixerAddress = await sdk.getMixer(mode, amount);
-    console.log(`  Mixer Address: ${mixerAddress.toString()}`);
-
-    return mixerAddress;
-  } catch (error: any) {
-    console.error(`✗ Solana deploy mixer error: ${error.message}`);
-    if (error.logs) {
-      console.error(`  Logs:`, error.logs);
-    }
-    throw error;
-  }
-}
-
-async function testSolanaClaimRewards(sdk: AintiVirusSolana) {
-  console.log("\n=== Testing Solana Claim Rewards ===");
-
-  try {
-    const currentSeason = await sdk.getCurrentStakeSeason();
-    console.log(`Current season: ${currentSeason.toString()}`);
-
-    if (currentSeason === 0n) {
-      console.log("⚠ No active season. Skipping claim test.");
-      return;
-    }
-
-    const userAddress = sdk["wallet"].publicKey;
-    const hasClaimed = await sdk.hasClaimedSol(
-      userAddress.toString(),
-      currentSeason
-    );
-
-    if (hasClaimed) {
-      console.log(
-        `⚠ Already claimed rewards for season ${currentSeason.toString()}`
-      );
-      return;
-    }
-
-    console.log(
-      `Claiming SOL rewards for season ${currentSeason.toString()}...`
-    );
-    const result = await sdk.claimSol(currentSeason);
-
-    console.log(`✓ Claim successful!`);
-    console.log(`  Transaction Signature: ${result.txHash}`);
-  } catch (error: any) {
-    console.error(`✗ Solana claim error: ${error.message}`);
-    if (error.logs) {
-      console.error(`  Logs:`, error.logs);
-    }
-    // Don't throw - claiming might fail if no rewards available
-    console.log("  (This is expected if no rewards are available)");
   }
 }
 
@@ -615,7 +440,7 @@ async function testSolanaClaimRewards(sdk: AintiVirusSolana) {
 
 async function main() {
   console.log("=========================================");
-  console.log("AintiVirus Mixer SDK - Devnet Test");
+  console.log("AintiVirus Mixer SDK - EVM Devnet Test");
   console.log("=========================================");
   console.log("\n=== EVM Configuration ===");
   console.log(`RPC URL: ${RPC_URL}`);
@@ -629,16 +454,10 @@ async function main() {
       Number(EXPECTED_FEE_RATE) / 10000
     }%)`
   );
-  console.log("\n=== Solana Configuration ===");
-  console.log(`Solana RPC URL: ${SOLANA_RPC_URL}`);
-  console.log(`Factory Program ID: ${SOLANA_FACTORY_PROGRAM_ID}`);
-  console.log(`Mixer Program ID: ${SOLANA_MIXER_PROGRAM_ID}`);
-  console.log(`Staking Program ID: ${SOLANA_STAKING_PROGRAM_ID}`);
   console.log("=========================================\n");
 
   try {
-    const allResults: Array<{
-      chain: string;
+    const results: Array<{
       name: string;
       success: boolean;
       error?: string;
@@ -647,8 +466,8 @@ async function main() {
     // ============================================
     // EVM Tests
     // ============================================
-    if (ENABLE_EVM_TESTS && RPC_URL && FACTORY_ADDRESS && TOKEN_ADDRESS) {
-      console.log("\n🔷 Running EVM Tests");
+    if (RPC_URL && FACTORY_ADDRESS && TOKEN_ADDRESS) {
+      console.log("\n🔷 Running Tests");
       console.log("=========================================\n");
 
       try {
@@ -721,22 +540,27 @@ async function main() {
             fn: () => testStaking(sdk, ethers.parseEther("0.05")),
           },
           {
+            name: "Start Stake Season",
+            fn: () => testStartStakeSeason(sdk),
+          },
+          {
             name: "Claim Rewards",
             fn: () => testClaimRewards(sdk),
+          },
+          {
+            name: "Unstake ETH",
+            fn: () => testUnstake(sdk),
           },
         ];
 
         for (const test of evmTests) {
           try {
-            console.log(`\n[EVM - ${test.name}]`);
+            console.log(`\n[${test.name}]`);
             await test.fn();
-            allResults.push({ chain: "EVM", name: test.name, success: true });
+            results.push({ name: test.name, success: true });
           } catch (error: any) {
-            console.error(
-              `\n✗ EVM Test "${test.name}" failed: ${error.message}`
-            );
-            allResults.push({
-              chain: "EVM",
+            console.error(`\n✗ Test "${test.name}" failed: ${error.message}`);
+            results.push({
               name: test.name,
               success: false,
               error: error.message,
@@ -744,179 +568,15 @@ async function main() {
           }
         }
       } catch (error: any) {
-        console.error(`\n✗ EVM setup error: ${error.message}`);
-        allResults.push({
-          chain: "EVM",
+        console.error(`\n✗ Setup error: ${error.message}`);
+        results.push({
           name: "Setup",
           success: false,
           error: error.message,
         });
       }
     } else {
-      if (!ENABLE_EVM_TESTS) {
-        console.log("\n⚠ EVM tests disabled (ENABLE_EVM_TESTS=false)");
-      } else {
-        console.log("\n⚠ Skipping EVM tests (missing configuration)");
-      }
-    }
-
-    // ============================================
-    // Solana Tests
-    // ============================================
-    console.log("\n\n🔷 Running Solana Tests");
-    console.log("=========================================\n");
-
-    try {
-      // Connect to Solana devnet
-      console.log("Connecting to Solana devnet...");
-      const connection = new Connection(SOLANA_RPC_URL, "confirmed");
-      try {
-        const version = await connection.getVersion();
-        const versionStr =
-          version["solana-core"] || version["version"] || "unknown";
-        console.log(`✓ Connected to Solana devnet (Version: ${versionStr})\n`);
-      } catch (versionError) {
-        // Version check is optional, continue anyway
-        console.log(`✓ Connected to Solana devnet\n`);
-      }
-
-      // Create or load wallet
-      let keypair: Keypair;
-      if (SOLANA_PRIVATE_KEY) {
-        // Try to parse as JSON array first
-        try {
-          const keyBytes = JSON.parse(SOLANA_PRIVATE_KEY);
-          keypair = Keypair.fromSecretKey(Uint8Array.from(keyBytes));
-        } catch {
-          // Try as base64
-          try {
-            keypair = Keypair.fromSecretKey(
-              Buffer.from(SOLANA_PRIVATE_KEY, "base64")
-            );
-          } catch {
-            throw new Error(
-              "Invalid SOLANA_PRIVATE_KEY format. Use JSON array or base64."
-            );
-          }
-        }
-      } else {
-        // Generate new keypair (needs to be funded)
-        keypair = Keypair.generate();
-        console.warn(
-          "⚠ Generated new keypair. Please fund this account on Solana devnet:"
-        );
-        console.warn(`  Address: ${keypair.publicKey.toString()}`);
-        console.warn(
-          "  You can get devnet SOL from: https://faucet.solana.com/\n"
-        );
-      }
-
-      const wallet = new Wallet(keypair);
-      const userAddress = keypair.publicKey;
-      console.log(`Using Solana account: ${userAddress.toString()}`);
-
-      // Check balance
-      const solBalance = await connection.getBalance(userAddress);
-      const solBalanceBigInt = BigInt(solBalance);
-      console.log(
-        `Account balance: ${solBalanceBigInt / 1_000_000_000n} SOL\n`
-      );
-
-      if (solBalance === 0) {
-        console.warn(
-          "⚠ WARNING: Account has zero balance. Some tests may fail."
-        );
-        console.warn(
-          "  Please fund this account on Solana devnet: https://faucet.solana.com/\n"
-        );
-      } else {
-        // Estimate: ~0.15 SOL total
-        const estimatedCost = 150_000_000n; // 0.15 SOL
-        if (solBalanceBigInt < estimatedCost) {
-          console.warn(
-            `⚠ WARNING: Account balance (${
-              solBalanceBigInt / 1_000_000_000n
-            } SOL) may be low for all tests.`
-          );
-          console.warn(
-            `  Estimated cost: ~${
-              estimatedCost / 1_000_000_000n
-            } SOL (including fees)\n`
-          );
-        } else {
-          console.log(
-            `✓ Account balance sufficient for testing (~${
-              estimatedCost / 1_000_000_000n
-            } SOL estimated cost)\n`
-          );
-        }
-      }
-
-      // Initialize Solana SDK
-      console.log("Initializing Solana SDK...");
-      const solanaSdk = new AintiVirusSolana(
-        SOLANA_FACTORY_PROGRAM_ID,
-        SOLANA_MIXER_PROGRAM_ID,
-        SOLANA_STAKING_PROGRAM_ID,
-        wallet,
-        connection
-      );
-      console.log("✓ Solana SDK initialized\n");
-
-      // Run Solana tests
-      const solAmount = 50_000_000n; // 0.05 SOL in lamports
-      const solanaTests: Array<{ name: string; fn: () => Promise<any> }> = [
-        {
-          name: "View Functions",
-          fn: () => testSolanaViewFunctions(solanaSdk, userAddress),
-        },
-        {
-          name: "Deploy Mixer (0.05 SOL)",
-          fn: () => testSolanaDeployMixer(solanaSdk, AssetMode.ETH, solAmount),
-        },
-        {
-          name: "Deposit (0.05 SOL)",
-          fn: () => testSolanaDeposit(solanaSdk, solAmount),
-        },
-        {
-          name: "Staking (0.05 SOL)",
-          fn: () => testSolanaStaking(solanaSdk, solAmount),
-        },
-        {
-          name: "Claim Rewards",
-          fn: () => testSolanaClaimRewards(solanaSdk),
-        },
-      ];
-
-      for (const test of solanaTests) {
-        try {
-          console.log(`\n[Solana - ${test.name}]`);
-          await test.fn();
-          allResults.push({
-            chain: "Solana",
-            name: test.name,
-            success: true,
-          });
-        } catch (error: any) {
-          console.error(
-            `\n✗ Solana Test "${test.name}" failed: ${error.message}`
-          );
-          allResults.push({
-            chain: "Solana",
-            name: test.name,
-            success: false,
-            error: error.message,
-          });
-        }
-      }
-    } catch (error: any) {
-      console.error(`\n✗ Solana setup error: ${error.message}`);
-      allResults.push({
-        chain: "Solana",
-        name: "Setup",
-        success: false,
-        error: error.message,
-      });
+      console.log("\n⚠ Skipping tests (missing configuration)");
     }
 
     // ============================================
@@ -926,35 +586,18 @@ async function main() {
     console.log("Test Summary");
     console.log("=========================================");
 
-    const evmResults = allResults.filter((r) => r.chain === "EVM");
-    const solanaResults = allResults.filter((r) => r.chain === "Solana");
-
-    if (evmResults.length > 0) {
-      console.log("\n--- EVM Tests ---");
-      for (const result of evmResults) {
-        const status = result.success ? "✓ PASS" : "✗ FAIL";
-        console.log(`${status} - ${result.name}`);
-        if (result.error) {
-          console.log(`      Error: ${result.error}`);
-        }
-      }
-    }
-
-    if (solanaResults.length > 0) {
-      console.log("\n--- Solana Tests ---");
-      for (const result of solanaResults) {
-        const status = result.success ? "✓ PASS" : "✗ FAIL";
-        console.log(`${status} - ${result.name}`);
-        if (result.error) {
-          console.log(`      Error: ${result.error}`);
-        }
+    for (const result of results) {
+      const status = result.success ? "✓ PASS" : "✗ FAIL";
+      console.log(`${status} - ${result.name}`);
+      if (result.error) {
+        console.log(`      Error: ${result.error}`);
       }
     }
 
     console.log("\n=========================================\n");
 
-    const passed = allResults.filter((r) => r.success).length;
-    const total = allResults.length;
+    const passed = results.filter((r) => r.success).length;
+    const total = results.length;
     console.log(`Total tests passed: ${passed}/${total}`);
 
     if (passed === total && total > 0) {
