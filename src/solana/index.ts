@@ -1,7 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram, Connection } from "@solana/web3.js";
+import { PublicKey, Connection } from "@solana/web3.js";
 import {
-  TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";

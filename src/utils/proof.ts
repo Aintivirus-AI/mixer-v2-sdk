@@ -2,7 +2,7 @@ import { poseidon2 } from "poseidon-lite";
 import MerkleTree from "fixed-merkle-tree";
 import { WithdrawalProof } from "../types";
 import { computeCommitment, computeNullifierHash } from "./crypto";
-import snarkjs from "snarkjs";
+import * as snarkjs from "snarkjs";
 
 /**
  * Build merkle tree from commitments
@@ -86,19 +86,11 @@ export async function generateWithdrawalProof(
     pathIndices: pathIndices.map((i) => i.toString()),
   };
 
-  // Generate witness (requires witness calculator)
-  // Note: This is a simplified version. In production, you need to:
-  // 1. Load the witness calculator from your compiled circuit
-  // 2. Calculate witness using the calculator
-  // 3. Generate proof using snarkjs.groth16.prove()
-
-  // For now, return placeholder
-  // TODO: Implement full proof generation with witness calculator
+  
   const nullifierHash = computeNullifierHash(nullifier);
   const recipientBigInt = BigInt(recipient);
 
   try {
-    // Attempt to generate proof if witness calculator is available
     // This would require loading the witness calculator from your build
     const { proof, publicSignals } = await snarkjs.groth16.fullProve(
       input,

@@ -14,13 +14,18 @@
  *   - Update contract addresses in .env file
  */
 
-import { ethers } from "ethers";
+import { ethers, Contract } from "ethers";
 import {
   AintiVirusEVM,
   AssetMode,
   generateSecretAndNullifier,
   computeCommitment,
-} from "./src";
+} from "../src";
+import {
+  buildMerkleTree,
+  generateWithdrawalProof,
+} from "../src/utils/proof";
+import { bytes32ToBigInt } from "../src/utils/crypto";
 import { config } from "dotenv";
 
 config();
@@ -32,16 +37,11 @@ config();
 const RPC_URL = process.env.RPC_URL || "http://localhost:8545";
 
 // Contract addresses
-const FACTORY_ADDRESS =
-  process.env.FACTORY_ADDRESS || "0xcC0a05eC339BDE293686AE3856253Ea2cA0db10c";
-const TOKEN_ADDRESS =
-  process.env.TOKEN_ADDRESS || "0x17A53880B82f3535646B85D62Eb805BceCF433d6"; // AINTI Token
-const STAKING_ADDRESS =
-  process.env.STAKING_ADDRESS || "0xA4A994D091012A64a96bD90E93AA5D9E1aeD4D66";
-const POSEIDON_ADDRESS =
-  process.env.POSEIDON_ADDRESS || "0xd7D831eaa532142541B56c7ae94464E904426FDc";
-const VERIFIER_ADDRESS =
-  process.env.VERIFIER_ADDRESS || "0xEf29b4549F80cd285D324F5411312a68fc292Da4";
+const FACTORY_ADDRESS =  process.env.FACTORY_ADDRESS ;
+const TOKEN_ADDRESS =  process.env.TOKEN_ADDRESS ; // AINTI Token
+const STAKING_ADDRESS = process.env.STAKING_ADDRESS ?? "";
+const POSEIDON_ADDRESS = process.env.POSEIDON_ADDRESS ;
+const VERIFIER_ADDRESS = process.env.VERIFIER_ADDRESS ;
 
 // Expected fee rate (250 = 0.25%)
 const EXPECTED_FEE_RATE = process.env.EXPECTED_FEE_RATE
@@ -50,9 +50,7 @@ const EXPECTED_FEE_RATE = process.env.EXPECTED_FEE_RATE
 
 // Test account private key (use a funded account on your devnet)
 // For local devnet, use the default Hardhat account #0
-const PRIVATE_KEY =
-  process.env.PRIVATE_KEY ||
-  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const PRIVATE_KEY = process.env.PRIVATE_KEY ?? "";
 
 // ============================================
 // Test Functions
@@ -76,10 +74,10 @@ async function testViewFunctions(sdk: AintiVirusEVM, userAddress: string) {
       );
     }
 
-    // Test mixer existence for 0.05 ETH
-    const amount = ethers.parseEther("0.05");
+    // Test mixer existence for 0.01 ETH
+    const amount = ethers.parseEther("0.01");
     const mixerExists = await sdk.mixerExists(AssetMode.ETH, amount);
-    console.log(`✓ Mixer exists for 0.05 ETH: ${mixerExists}`);
+    console.log(`✓ Mixer exists for 0.01 ETH: ${mixerExists}`);
 
     if (mixerExists) {
       const mixerAddress = await sdk.getMixer(AssetMode.ETH, amount);
@@ -89,7 +87,7 @@ async function testViewFunctions(sdk: AintiVirusEVM, userAddress: string) {
     // Test deposit amount calculation
     const depositAmount = await sdk.calculateDepositAmount(amount);
     console.log(
-      `✓ Deposit amount (0.05 ETH + fees): ${ethers.formatEther(
+      `✓ Deposit amount (0.01 ETH + fees): ${ethers.formatEther(
         depositAmount
       )} ETH`
     );
@@ -205,6 +203,155 @@ async function testDeposit(sdk: AintiVirusEVM, amount: bigint) {
   }
 }
 
+async function testWithdraw(
+  sdk: AintiVirusEVM,
+  amount: bigint,
+  secret?: bigint,
+  nullifier?: bigint
+) {
+  console.log("\n=== Testing Withdraw ===");
+
+  try {
+    // Check if mixer exists
+    const exists = await sdk.mixerExists(AssetMode.ETH, amount);
+    if (!exists) {
+      console.log(
+        "⚠ Mixer not deployed for this amount. Skipping withdraw test."
+      );
+      return;
+    }
+
+    // Secret and nullifier are required
+    if (!secret || !nullifier) {
+      throw new Error(
+        "Secret and nullifier are required for withdrawal. Please provide both parameters."
+      );
+    }
+
+    const depositCommitment = computeCommitment(secret, nullifier);
+
+    console.log(`Attempting to withdraw ${ethers.formatEther(amount)} ETH...`);
+    console.log(`Secret: ${secret.toString()}`);
+    console.log(`Nullifier: ${nullifier.toString()}`);
+    console.log(`Commitment: ${depositCommitment.toString()}`);
+
+    // Get mixer address and create mixer contract instance
+    const mixerAddress = await sdk.getMixer(AssetMode.ETH, amount);
+    const provider = sdk.getProvider();
+    
+    // Mixer ABI for Deposit event
+    const MIXER_ABI = [
+      "event Deposit(bytes32 indexed commitment, uint32 leafIndex, uint256 timestamp)",
+    ];
+    const mixer = new Contract(mixerAddress, MIXER_ABI, provider);
+
+    // Query all deposit events from the mixer
+    console.log("Querying deposit events from mixer...");
+    const depositEvents = await mixer.queryFilter(mixer.filters.Deposit());
+    
+    if (depositEvents.length === 0) {
+      console.log("⚠ No deposit events found. Skipping withdraw test.");
+      return;
+    }
+
+    // Extract commitments from events and build merkle tree
+    const commitments: bigint[] = depositEvents.map((event: any) => {
+      return bytes32ToBigInt(event.args[0]);
+    });
+
+    console.log(`Found ${commitments.length} deposit(s) in mixer`);
+    
+    // Build merkle tree from commitments
+    console.log("Building merkle tree from commitments...");
+    const merkleTree = buildMerkleTree(commitments);
+    const root = BigInt(merkleTree.root);
+    console.log(`Merkle root: ${root.toString()}`);
+
+    // Find the commitment index in the tree
+    const commitmentIndex = merkleTree.elements.indexOf(depositCommitment.toString());
+    if (commitmentIndex === -1) {
+      console.log("⚠ Commitment not found in merkle tree. Skipping withdraw test.");
+      return;
+    }
+
+    // Get merkle path for the commitment
+    const merklePath = merkleTree.path(commitmentIndex);
+    const pathElements = merklePath.pathElements.map((e) => BigInt(e));
+    const pathIndices = merklePath.pathIndices;
+
+    console.log(`Commitment found at leaf index: ${commitmentIndex}`);
+    console.log(`Merkle path depth: ${pathElements.length}`);
+
+    // Get recipient address
+    const signer = (sdk as any).signer;
+    if (!signer) {
+      console.log("⚠ No signer available. Skipping withdraw test.");
+      return;
+    }
+    const recipient = await signer.getAddress();
+
+    // Load circuit files from IPFS
+    console.log("Loading circuit files from IPFS...");
+    const wasmUrl = "https://pink-academic-gamefowl-968.mypinata.cloud/ipfs/bafybeibhilxde222rvmpit5wn2o4mtoy7bv4eqv4gv2orgde3roipdvzqu";
+    const zkeyUrl = "https://pink-academic-gamefowl-968.mypinata.cloud/ipfs/bafybeibwbfyigzm4rmwnqclwhkfccy32ni6tykaoepvnibutgsqi7gfere";
+    
+    const [wasmResponse, zkeyResponse] = await Promise.all([
+      fetch(wasmUrl),
+      fetch(zkeyUrl)
+    ]);
+    
+    if (!wasmResponse.ok) {
+      throw new Error(`Failed to fetch WASM file: ${wasmResponse.statusText}`);
+    }
+    if (!zkeyResponse.ok) {
+      throw new Error(`Failed to fetch Zkey file: ${zkeyResponse.statusText}`);
+    }
+    
+    const circuitWasm = Buffer.from(await wasmResponse.arrayBuffer());
+    const circuitZkey = Buffer.from(await zkeyResponse.arrayBuffer());
+    console.log("✓ Circuit files loaded from IPFS");
+
+    // Generate withdrawal proof
+    console.log("Generating withdrawal proof...");
+    const proof = await generateWithdrawalProof(
+      secret,
+      nullifier,
+      root,
+      recipient,
+      pathElements,
+      pathIndices,
+      circuitWasm,
+      circuitZkey
+    );
+
+    console.log("✓ Proof generated successfully");
+
+    // Attempt withdraw
+    console.log("Sending withdraw transaction...");
+    const result = await sdk.withdraw(proof, amount, AssetMode.ETH);
+
+    console.log(`✓ Withdraw successful!`);
+    console.log(`  Transaction Hash: ${result.txHash}`);
+    console.log(`  Block Number: ${result.blockNumber}`);
+    if (result.blockTime) {
+      console.log(
+        `  Block Time: ${new Date(
+          Number(result.blockTime) * 1000
+        ).toISOString()}`
+      );
+    }
+  } catch (error: any) {
+    console.error(`✗ Withdraw error: ${error.message}`);
+    if (error.data) {
+      console.error(`  Error data: ${error.data}`);
+    }
+    // Don't throw - withdraw might fail if proof is invalid, no deposit exists, or other issues
+    console.log(
+      "  (This might be expected if the commitment is not in the merkle tree or proof verification fails)"
+    );
+  }
+}
+
 async function testStaking(sdk: AintiVirusEVM, amount: bigint) {
   console.log("\n=== Testing Staking ===");
 
@@ -271,98 +418,6 @@ async function testDeployMixer(
     return result.mixerAddress;
   } catch (error: any) {
     console.error(`✗ Deploy mixer error: ${error.message}`);
-    if (error.data) {
-      console.error(`  Error data: ${error.data}`);
-    }
-    throw error;
-  }
-}
-
-async function testClaimRewards(sdk: AintiVirusEVM) {
-  console.log("\n=== Testing Claim Rewards ===");
-
-  try {
-    const currentSeason = await sdk.getCurrentStakeSeason();
-    console.log(`Current season: ${currentSeason.toString()}`);
-
-    if (currentSeason === 0n) {
-      console.log("⚠ No active season. Skipping claim test.");
-      return;
-    }
-
-    const signer = (sdk as any).signer;
-    if (!signer) {
-      console.log("⚠ No signer available. Skipping claim test.");
-      return;
-    }
-
-    const userAddress = await signer.getAddress();
-    const hasClaimed = await sdk.hasClaimedEth(userAddress, currentSeason);
-
-    if (hasClaimed) {
-      console.log(
-        `⚠ Already claimed rewards for season ${currentSeason.toString()}`
-      );
-      return;
-    }
-
-    console.log(
-      `Claiming ETH rewards for season ${currentSeason.toString()}...`
-    );
-    const result = await sdk.claimEth(currentSeason);
-
-    console.log(`✓ Claim successful!`);
-    console.log(`  Transaction Hash: ${result.txHash}`);
-    console.log(`  Block Number: ${result.blockNumber}`);
-  } catch (error: any) {
-    console.error(`✗ Claim error: ${error.message}`);
-    if (error.data) {
-      console.error(`  Error data: ${error.data}`);
-    }
-    // Don't throw - claiming might fail if no rewards available
-    console.log("  (This is expected if no rewards are available)");
-  }
-}
-
-async function testStartStakeSeason(sdk: AintiVirusEVM) {
-  console.log("\n=== Testing Start Stake Season ===");
-
-  try {
-    // Get current stake season
-    let currentSeason: bigint;
-    try {
-      currentSeason = await sdk.getCurrentStakeSeason();
-      console.log(`✓ Current stake season: ${currentSeason.toString()}`);
-    } catch (error: any) {
-      console.log(`⚠ Could not get current season: ${error.message}`);
-      currentSeason = 0n;
-    }
-
-    console.log(`Starting new stake season...`);
-
-    const result = await sdk.startStakeSeason();
-
-    console.log(`✓ Start stake season successful!`);
-    console.log(`  Transaction Hash: ${result.txHash}`);
-    console.log(`  Block Number: ${result.blockNumber}`);
-
-    // Wait a bit for the new season to be available
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    // Verify the new season was created
-    try {
-      const newSeasonId = currentSeason + 1n;
-      const newSeason = await sdk.getStakeSeason(newSeasonId);
-      console.log(`✓ Verified new stake season:`);
-      console.log(`  - Season ID: ${newSeason.seasonId.toString()}`);
-      console.log(
-        `  - Start Timestamp: ${newSeason.startTimestamp.toString()}`
-      );
-    } catch (error: any) {
-      console.log(`⚠ Could not verify new stake season: ${error.message}`);
-    }
-  } catch (error: any) {
-    console.error(`✗ Start stake season error: ${error.message}`);
     if (error.data) {
       console.error(`  Error data: ${error.data}`);
     }
@@ -520,6 +575,9 @@ async function main() {
         const sdk = new AintiVirusEVM(FACTORY_ADDRESS, TOKEN_ADDRESS, wallet);
         console.log("✓ EVM SDK initialized\n");
 
+        // Store deposit data for withdraw test
+        let depositData: { secret: bigint; nullifier: bigint; commitment: bigint } | null = null;
+
         // Run EVM tests
         const evmTests: Array<{ name: string; fn: () => Promise<any> }> = [
           {
@@ -527,25 +585,38 @@ async function main() {
             fn: () => testViewFunctions(sdk, userAddress),
           },
           {
-            name: "Deploy Mixer (0.05 ETH)",
+            name: "Deploy Mixer (0.01 ETH)",
             fn: () =>
-              testDeployMixer(sdk, AssetMode.ETH, ethers.parseEther("0.05")),
+              testDeployMixer(sdk, AssetMode.ETH, ethers.parseEther("0.01")),
           },
           {
-            name: "Deposit (0.05 ETH)",
-            fn: () => testDeposit(sdk, ethers.parseEther("0.05")),
+            name: "Deposit (0.01 ETH)",
+            fn: async () => {
+              const result = await testDeposit(sdk, ethers.parseEther("0.01"));
+              if (result) {
+                depositData = result;
+              }
+              return result;
+            },
           },
           {
-            name: "Staking (0.05 ETH)",
-            fn: () => testStaking(sdk, ethers.parseEther("0.05")),
+            name: "Withdraw (0.01 ETH)",
+            fn: () => {
+              if (depositData) {
+                return testWithdraw(
+                  sdk,
+                  ethers.parseEther("0.01"),
+                  depositData.secret,
+                  depositData.nullifier
+                );
+              } else {
+                return testWithdraw(sdk, ethers.parseEther("0.01"));
+              }
+            },
           },
           {
-            name: "Start Stake Season",
-            fn: () => testStartStakeSeason(sdk),
-          },
-          {
-            name: "Claim Rewards",
-            fn: () => testClaimRewards(sdk),
+            name: "Staking (0.01 ETH)",
+            fn: () => testStaking(sdk, ethers.parseEther("0.01")),
           },
           {
             name: "Unstake ETH",

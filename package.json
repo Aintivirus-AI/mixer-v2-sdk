@@ -8,8 +8,8 @@
     "build": "npx tsc",
     "dev": "npx tsc --watch",
     "prepublishOnly": "npm run build",
-    "test:devnet": "tsx test-devnet.ts",
-    "test:solana": "tsx test-solana-devnet.ts"
+    "test:devnet": "tsx test/test-devnet.ts",
+    "test:solana": "tsx test/test-solana-devnet.ts"
   },
   "keywords": [
     "web3",
