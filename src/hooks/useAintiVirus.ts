@@ -46,6 +46,12 @@ export interface UseAintiVirusReturn {
     amount: bigint,
     mode: AssetMode
   ) => Promise<TransactionResult>;
+  withdrawRelayed: (
+    chainType: ChainType,
+    proof: WithdrawalProof,
+    amount: bigint,
+    mode: AssetMode
+  ) => Promise<TransactionResult>;
 
   // Staking functions
   stake: (chainType: ChainType, amount: bigint) => Promise<TransactionResult>;
@@ -216,6 +222,27 @@ export function useAintiVirus(config: UnifiedHookConfig): UseAintiVirusReturn {
     [evmSDK, solanaSDK]
   );
 
+  // Withdraw via relayer (EVM only)
+  const withdrawRelayed = useCallback(
+    async (
+      chainType: ChainType,
+      proof: WithdrawalProof,
+      amount: bigint,
+      mode: AssetMode
+    ): Promise<TransactionResult> => {
+      if (chainType === ChainType.EVM) {
+        if (!evmSDK) {
+          throw new Error("EVM SDK not initialized");
+        }
+        return evmSDK.withdrawRelayed(proof, amount, mode);
+      } else if (chainType === ChainType.SOLANA) {
+        throw new Error("Relayed withdrawals are not supported on Solana");
+      }
+      throw new Error(`Unsupported chain type: ${chainType}`);
+    },
+    [evmSDK]
+  );
+
   // Stake function
   const stake = useCallback(
     async (
@@ -352,6 +379,7 @@ export function useAintiVirus(config: UnifiedHookConfig): UseAintiVirusReturn {
   return {
     deposit,
     withdraw,
+    withdrawRelayed,
     stake,
     unstake,
     claim,

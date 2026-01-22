@@ -8,6 +8,7 @@
     "build": "npx tsc",
     "dev": "npx tsc --watch",
     "prepublishOnly": "npm run build",
+    "validate:subgraph": "tsx scripts/validate-subgraph-queries.ts",
     "test:devnet": "tsx test/test-devnet.ts",
     "test:solana": "tsx test/test-solana-devnet.ts"
   },
@@ -38,6 +39,7 @@
     "@types/react-dom": "^18.2.0",
     "@types/snarkjs": "^0.7.9",
     "dotenv": "^16.6.1",
+    "graphql": "^16.12.0",
     "react": "^18.2.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",

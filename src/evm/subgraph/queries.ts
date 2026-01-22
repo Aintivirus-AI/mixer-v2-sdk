@@ -1,0 +1,293 @@
+export const QUERIES = {
+  protocol: `
+    query GetProtocol($id: ID!) {
+      protocol(id: $id) {
+        id
+        feeRate
+        relayerFeeRate
+        factoryAddress
+        stakingAddress
+        nextSeasonDuration
+        currentSeasonId
+        totalDeposited
+        totalWithdrawn
+        depositCount
+        withdrawalCount
+        totalStaked
+        totalClaimed
+        updatedBlockNumber
+        updatedBlockTimestamp
+        updatedTransactionHash
+      }
+    }
+  `,
+
+  anyProtocol: `
+    query GetAnyProtocol {
+      protocols(first: 1, orderBy: updatedBlockTimestamp, orderDirection: desc) {
+        id
+        feeRate
+        relayerFeeRate
+        factoryAddress
+        stakingAddress
+        nextSeasonDuration
+        currentSeasonId
+        totalDeposited
+        totalWithdrawn
+        depositCount
+        withdrawalCount
+        totalStaked
+        totalClaimed
+        updatedBlockNumber
+        updatedBlockTimestamp
+        updatedTransactionHash
+      }
+    }
+  `,
+
+  mixerPools: `
+    query GetMixerPools(
+      $first: Int!,
+      $skip: Int!,
+      $where: MixerPool_filter,
+      $orderBy: MixerPool_orderBy!,
+      $orderDirection: OrderDirection!
+    ) {
+      mixerPools(
+        first: $first,
+        skip: $skip,
+        where: $where,
+        orderBy: $orderBy,
+        orderDirection: $orderDirection
+      ) {
+        id
+        mode
+        amount
+        address
+        deployedBlockNumber
+        deployedBlockTimestamp
+        deployedTransactionHash
+        totalDeposited
+        totalWithdrawn
+        depositCount
+        withdrawalCount
+      }
+    }
+  `,
+
+  mixerPoolById: `
+    query GetMixerPool($id: ID!) {
+      mixerPool(id: $id) {
+        id
+        mode
+        amount
+        address
+        deployedBlockNumber
+        deployedBlockTimestamp
+        deployedTransactionHash
+        totalDeposited
+        totalWithdrawn
+        depositCount
+        withdrawalCount
+      }
+    }
+  `,
+
+  deposits: `
+    query GetDeposits(
+      $first: Int!,
+      $skip: Int!,
+      $where: Deposit_filter,
+      $orderBy: Deposit_orderBy!,
+      $orderDirection: OrderDirection!
+    ) {
+      deposits(
+        first: $first,
+        skip: $skip,
+        where: $where,
+        orderBy: $orderBy,
+        orderDirection: $orderDirection
+      ) {
+        id
+        pool { id }
+        commitment
+        blockNumber
+        blockTimestamp
+        transactionHash
+      }
+    }
+  `,
+
+  withdrawals: `
+    query GetWithdrawals(
+      $first: Int!,
+      $skip: Int!,
+      $where: Withdrawal_filter,
+      $orderBy: Withdrawal_orderBy!,
+      $orderDirection: OrderDirection!
+    ) {
+      withdrawals(
+        first: $first,
+        skip: $skip,
+        where: $where,
+        orderBy: $orderBy,
+        orderDirection: $orderDirection
+      ) {
+        id
+        pool { id }
+        to
+        nullifierHash
+        blockNumber
+        blockTimestamp
+        transactionHash
+      }
+    }
+  `,
+
+  withdrawalsRelayed: `
+    query GetWithdrawalsRelayed(
+      $first: Int!,
+      $skip: Int!,
+      $where: WithdrawalRelayed_filter,
+      $orderDirection: OrderDirection!
+    ) {
+      withdrawalRelayeds(
+        first: $first,
+        skip: $skip,
+        where: $where,
+        orderBy: blockTimestamp,
+        orderDirection: $orderDirection
+      ) {
+        id
+        pool { id }
+        recipient
+        relayer
+        relayerFee
+        nullifierHash
+        blockNumber
+        blockTimestamp
+        transactionHash
+      }
+    }
+  `,
+
+  season: `
+    query GetSeason($id: ID!) {
+      season(id: $id) {
+        id
+        seasonId
+        start
+        end
+        duration
+        modes {
+          id
+          mode
+          duration
+          totalStaked
+          totalReward
+          totalWeight
+        }
+      }
+    }
+  `,
+
+  seasonModes: `
+    query GetSeasonModes(
+      $first: Int!,
+      $skip: Int!,
+      $where: SeasonMode_filter,
+      $orderDirection: OrderDirection!
+    ) {
+      seasonModes(
+        first: $first,
+        skip: $skip,
+        where: $where,
+        orderBy: id,
+        orderDirection: $orderDirection
+      ) {
+        id
+        mode
+        duration
+        totalStaked
+        totalReward
+        totalWeight
+      }
+    }
+  `,
+
+  stakedEvents: `
+    query GetStakedEvents(
+      $first: Int!,
+      $skip: Int!,
+      $where: Staked_filter,
+      $orderDirection: OrderDirection!
+    ) {
+      stakeds(
+        first: $first,
+        skip: $skip,
+        where: $where,
+        orderBy: blockTimestamp,
+        orderDirection: $orderDirection
+      ) {
+        id
+        staker
+        seasonMode { id }
+        amount
+        blockNumber
+        blockTimestamp
+        transactionHash
+      }
+    }
+  `,
+
+  unstakedEvents: `
+    query GetUnstakedEvents(
+      $first: Int!,
+      $skip: Int!,
+      $where: Unstaked_filter,
+      $orderDirection: OrderDirection!
+    ) {
+      unstakeds(
+        first: $first,
+        skip: $skip,
+        where: $where,
+        orderBy: blockTimestamp,
+        orderDirection: $orderDirection
+      ) {
+        id
+        staker
+        seasonMode { id }
+        amount
+        blockNumber
+        blockTimestamp
+        transactionHash
+      }
+    }
+  `,
+
+  claimedEvents: `
+    query GetClaimedEvents(
+      $first: Int!,
+      $skip: Int!,
+      $where: Claimed_filter,
+      $orderDirection: OrderDirection!
+    ) {
+      claimeds(
+        first: $first,
+        skip: $skip,
+        where: $where,
+        orderBy: blockTimestamp,
+        orderDirection: $orderDirection
+      ) {
+        id
+        staker
+        seasonMode { id }
+        amount
+        blockNumber
+        blockTimestamp
+        transactionHash
+      }
+    }
+  `,
+} as const;
+

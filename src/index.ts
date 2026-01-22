@@ -13,6 +13,9 @@ export * from "./types";
 // Export EVM SDK
 export { AintiVirusEVM };
 
+// Export The Graph (EVM-only) client
+export * from "./evm/subgraph";
+
 // Export Solana SDK
 export { AintiVirusSolana };
 

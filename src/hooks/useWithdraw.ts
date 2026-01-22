@@ -42,6 +42,12 @@ export interface UseWithdrawReturn {
     amount: bigint,
     mode: AssetMode
   ) => Promise<TransactionResult>;
+  withdrawRelayed: (
+    chainType: ChainType,
+    proof: WithdrawalProof,
+    amount: bigint,
+    mode: AssetMode
+  ) => Promise<TransactionResult>;
   isEVMReady: boolean;
   isSolanaReady: boolean;
 }
@@ -151,8 +157,30 @@ export function useWithdraw(config: WithdrawHookConfig): UseWithdrawReturn {
     [evmSDK, solanaSDK]
   );
 
+  // Withdraw via relayer (EVM only)
+  const withdrawRelayed = useCallback(
+    async (
+      chainType: ChainType,
+      proof: WithdrawalProof,
+      amount: bigint,
+      mode: AssetMode
+    ): Promise<TransactionResult> => {
+      if (chainType === ChainType.EVM) {
+        if (!evmSDK) {
+          throw new Error("EVM SDK not initialized");
+        }
+        return evmSDK.withdrawRelayed(proof, amount, mode);
+      } else if (chainType === ChainType.SOLANA) {
+        throw new Error("Relayed withdrawals are not supported on Solana");
+      }
+      throw new Error(`Unsupported chain type: ${chainType}`);
+    },
+    [evmSDK]
+  );
+
   return {
     withdraw,
+    withdrawRelayed,
     isEVMReady,
     isSolanaReady,
   };

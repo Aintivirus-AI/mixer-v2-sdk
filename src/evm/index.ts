@@ -21,27 +21,28 @@ export class AintiVirusEVM {
   private static readonly FACTORY_ABI = [
     "function deposit(uint256 _mode, uint256 _amount, bytes32 _commitment) payable",
     "function withdraw(tuple(uint256[2] pA, uint256[2][2] pB, uint256[2] pC, uint256[3] pubSignals) _proof, uint256 _amount, uint256 _mode)",
+    "function withdrawRelayed(tuple(uint256[2] pA, uint256[2][2] pB, uint256[2] pC, uint256[3] pubSignals) _proof, uint256 _amount, uint256 _mode)",
     "function deployMixer(uint256 _mode, uint256 _amount) returns (address)",
     "function getMixer(uint256 _mode, uint256 _amount) view returns (address)",
     "function calculateDepositAmount(uint256 _amount) view returns (uint256)",
     "function feeRate() view returns (uint256)",
+    "function relayerFeeRate() view returns (uint256)",
     "function staking() view returns (address)",
     "function mixToken() view returns (address)",
-    "function stakeEther(uint256 amount) payable",
-    "function stakeToken(uint256 amount)",
-    "function claimEth(uint256 seasonId)",
-    "function claimToken(uint256 seasonId)",
-    "function unstakeEth()",
-    "function unstakeToken()",
+    "function stake(uint256 mode, uint256 amount) payable",
+    "function claim(uint256 mode, uint256 seasonId) returns (uint256)",
+    "function unstake(uint256 mode) returns (uint256)",
     "function getCurrentStakeSeason() view returns (uint256)",
     "function setFeeRate(uint256 _feeRate)",
-    "function setStakingSeasonPeriod(uint256 _period)",
-    "function startStakeSeason()",
-    "function setVerifier(address _verifier)",
+    "function updateNextSeasonDuration(uint256 _duration)",
+    "function startSeason()",
+    "function setRelayerFeeRate(uint256 _relayerFeeRate)",
     "event MixerDeployed(address indexed mixer, uint256 indexed mode, uint256 indexed amount)",
-    "event Deposit(bytes32 indexed commitment, uint32 leafIndex, uint256 timestamp)",
-    "event Withdrawal(address to, bytes32 nullifierHash)",
+    "event Deposit(uint256 indexed mode, uint256 amount, uint256 fee, bytes32 indexed commitment)",
+    "event Withdrawal(uint256 indexed mode, uint256 amount, address to, bytes32 nullifierHash)",
+    "event WithdrawalRelayed(uint256 indexed mode, uint256 amount, address indexed recipient, address indexed relayer, uint256 relayerFee, bytes32 nullifierHash)",
     "event FeeRateUpdated(uint256 oldFeeRate, uint256 newFeeRate)",
+    "event RelayerFeeRateUpdated(uint256 oldRelayerFeeRate, uint256 newRelayerFeeRate)",
   ];
 
   // ERC20 ABI
@@ -54,12 +55,11 @@ export class AintiVirusEVM {
 
   // Staking ABI
   private static readonly STAKING_ABI = [
-    "function stakeSeasons(uint256) view returns (uint256 seasonId, uint256 startTimestamp, uint256 endTimestamp, uint256 totalStakedEthAmount, uint256 totalStakedTokenAmount, uint256 totalRewardEthAmount, uint256 totalRewardTokenAmount, uint256 totalEthWeightValue, uint256 totalTokenWeightValue)",
-    "function stakeRecords(address) view returns (uint256 ethStakedSeasonId, uint256 tokenStakedSeasonId, uint256 ethStakedTimestamp, uint256 tokenStakedTimestamp, uint256 stakedEthAmount, uint256 stakedTokenAmount, uint256 ethWeightValue, uint256 tokenWeightValue)",
-    "function addressToSeasonClaimedEth(address, uint256) view returns (bool)",
-    "function addressToSeasonClaimedToken(address, uint256) view returns (bool)",
-    "function stakingSeasonPeriod() view returns (uint256)",
-    "function currentStakeSeason() view returns (uint256)",
+    "function seasons(uint256 seasonId_, uint256 mode_) view returns (uint256 seasonId, uint256 start, uint256 end, uint256 duration, uint256 totalStaked, uint256 totalReward, uint256 totalWeight)",
+    "function records(address staker_, uint256 mode_) view returns (uint64 seasonId, uint64 stakedAt, uint128 claimedCount, uint256 staked, uint256 weight)",
+    "function wasSeasonClaimed(address staker, uint256 seasonId, uint256 mode) view returns (bool)",
+    "function nextSeasonDuration() view returns (uint256)",
+    "function currentSeasonId() view returns (uint256)",
   ];
 
   constructor(
@@ -239,6 +239,38 @@ export class AintiVirusEVM {
   }
 
   /**
+   * Withdraw via a relayer (EVM Factory: withdrawRelayed)
+   */
+  async withdrawRelayed(
+    proof: WithdrawalProof,
+    amount: bigint,
+    mode: AssetMode
+  ): Promise<TransactionResult> {
+    if (!this.signer) {
+      throw new Error("Signer required for transactions");
+    }
+
+    const formattedProof = {
+      pA: [proof.pA[0].toString(), proof.pA[1].toString()],
+      pB: [
+        [proof.pB[0][0].toString(), proof.pB[0][1].toString()],
+        [proof.pB[1][0].toString(), proof.pB[1][1].toString()],
+      ],
+      pC: [proof.pC[0].toString(), proof.pC[1].toString()],
+      pubSignals: proof.pubSignals.map((s) => s.toString()),
+    };
+
+    const tx = await this.factory.withdrawRelayed(formattedProof, amount, mode);
+    const receipt = await tx.wait();
+
+    return {
+      txHash: receipt.hash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
    * Stake ETH
    */
   async stakeEther(amount: bigint): Promise<TransactionResult> {
@@ -246,7 +278,7 @@ export class AintiVirusEVM {
       throw new Error("Signer required for transactions");
     }
 
-    const tx = await this.factory.stakeEther(amount, { value: amount });
+    const tx = await this.factory.stake(AssetMode.ETH, amount, { value: amount });
     const receipt = await tx.wait();
 
     return {
@@ -274,7 +306,7 @@ export class AintiVirusEVM {
       await approveTx.wait();
     }
 
-    const tx = await this.factory.stakeToken(amount);
+    const tx = await this.factory.stake(AssetMode.TOKEN, amount);
     const receipt = await tx.wait();
 
     return {
@@ -292,7 +324,7 @@ export class AintiVirusEVM {
       throw new Error("Signer required for transactions");
     }
 
-    const tx = await this.factory.claimEth(seasonId);
+    const tx = await this.factory.claim(AssetMode.ETH, seasonId);
     const receipt = await tx.wait();
 
     return {
@@ -310,7 +342,7 @@ export class AintiVirusEVM {
       throw new Error("Signer required for transactions");
     }
 
-    const tx = await this.factory.claimToken(seasonId);
+    const tx = await this.factory.claim(AssetMode.TOKEN, seasonId);
     const receipt = await tx.wait();
 
     return {
@@ -328,7 +360,7 @@ export class AintiVirusEVM {
       throw new Error("Signer required for transactions");
     }
 
-    const tx = await this.factory.unstakeEth();
+    const tx = await this.factory.unstake(AssetMode.ETH);
     const receipt = await tx.wait();
 
     return {
@@ -346,7 +378,7 @@ export class AintiVirusEVM {
       throw new Error("Signer required for transactions");
     }
 
-    const tx = await this.factory.unstakeToken();
+    const tx = await this.factory.unstake(AssetMode.TOKEN);
     const receipt = await tx.wait();
 
     return {
@@ -400,17 +432,21 @@ export class AintiVirusEVM {
         this.provider
       );
 
-      const season = await staking.stakeSeasons(seasonId);
+      // New staking contract is mode-scoped; fetch both modes and merge into the legacy shape.
+      const [ethSeason, tokenSeason] = await Promise.all([
+        staking.seasons(seasonId, AssetMode.ETH),
+        staking.seasons(seasonId, AssetMode.TOKEN),
+      ]);
       return {
-        seasonId: season.seasonId,
-        startTimestamp: season.startTimestamp,
-        endTimestamp: season.endTimestamp,
-        totalStakedEthAmount: season.totalStakedEthAmount,
-        totalStakedTokenAmount: season.totalStakedTokenAmount,
-        totalRewardEthAmount: season.totalRewardEthAmount,
-        totalRewardTokenAmount: season.totalRewardTokenAmount,
-        totalEthWeightValue: season.totalEthWeightValue,
-        totalTokenWeightValue: season.totalTokenWeightValue,
+        seasonId: BigInt(ethSeason.seasonId.toString()),
+        startTimestamp: BigInt(ethSeason.start.toString()),
+        endTimestamp: BigInt(ethSeason.end.toString()),
+        totalStakedEthAmount: BigInt(ethSeason.totalStaked.toString()),
+        totalStakedTokenAmount: BigInt(tokenSeason.totalStaked.toString()),
+        totalRewardEthAmount: BigInt(ethSeason.totalReward.toString()),
+        totalRewardTokenAmount: BigInt(tokenSeason.totalReward.toString()),
+        totalEthWeightValue: BigInt(ethSeason.totalWeight.toString()),
+        totalTokenWeightValue: BigInt(tokenSeason.totalWeight.toString()),
       };
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -431,16 +467,19 @@ export class AintiVirusEVM {
       this.provider
     );
 
-    const record = await staking.stakeRecords(address);
+    const [ethRecord, tokenRecord] = await Promise.all([
+      staking.records(address, AssetMode.ETH),
+      staking.records(address, AssetMode.TOKEN),
+    ]);
     return {
-      ethStakedSeasonId: record.ethStakedSeasonId,
-      tokenStakedSeasonId: record.tokenStakedSeasonId,
-      ethStakedTimestamp: record.ethStakedTimestamp,
-      tokenStakedTimestamp: record.tokenStakedTimestamp,
-      stakedEthAmount: record.stakedEthAmount,
-      stakedTokenAmount: record.stakedTokenAmount,
-      ethWeightValue: record.ethWeightValue,
-      tokenWeightValue: record.tokenWeightValue,
+      ethStakedSeasonId: BigInt(ethRecord.seasonId.toString()),
+      tokenStakedSeasonId: BigInt(tokenRecord.seasonId.toString()),
+      ethStakedTimestamp: BigInt(ethRecord.stakedAt.toString()),
+      tokenStakedTimestamp: BigInt(tokenRecord.stakedAt.toString()),
+      stakedEthAmount: BigInt(ethRecord.staked.toString()),
+      stakedTokenAmount: BigInt(tokenRecord.staked.toString()),
+      ethWeightValue: BigInt(ethRecord.weight.toString()),
+      tokenWeightValue: BigInt(tokenRecord.weight.toString()),
     };
   }
 
@@ -454,7 +493,7 @@ export class AintiVirusEVM {
       AintiVirusEVM.STAKING_ABI,
       this.provider
     );
-    return await staking.addressToSeasonClaimedEth(address, seasonId);
+    return await staking.wasSeasonClaimed(address, seasonId, AssetMode.ETH);
   }
 
   /**
@@ -467,7 +506,7 @@ export class AintiVirusEVM {
       AintiVirusEVM.STAKING_ABI,
       this.provider
     );
-    return await staking.addressToSeasonClaimedToken(address, seasonId);
+    return await staking.wasSeasonClaimed(address, seasonId, AssetMode.TOKEN);
   }
 
   /**
@@ -522,3 +561,6 @@ export class AintiVirusEVM {
     };
   }
 }
+
+// The Graph (EVM-only) helpers
+export * from "./subgraph";

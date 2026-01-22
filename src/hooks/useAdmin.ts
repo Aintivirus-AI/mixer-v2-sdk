@@ -37,11 +37,25 @@ export interface UseAdminReturn {
     feeRate: bigint
   ) => Promise<TransactionResult>;
 
+  // Relayer fee management (EVM only)
+  setRelayerFeeRate: (
+    chainType: ChainType,
+    relayerFeeRate: bigint
+  ) => Promise<TransactionResult>;
+
   // Staking management
+  /**
+   * EVM: maps to Factory.updateNextSeasonDuration(durationSeconds)
+   * Solana: maps to the existing staking season period setter
+   */
   setStakingSeasonPeriod: (
     chainType: ChainType,
     period: bigint
   ) => Promise<TransactionResult>;
+  /**
+   * EVM: maps to Factory.startSeason()
+   * Solana: maps to starting the next season id
+   */
   startStakeSeason: (chainType: ChainType) => Promise<TransactionResult>;
 
   isEVMReady: boolean;
@@ -151,6 +165,32 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
     [evmSDK, solanaSDK]
   );
 
+  const setRelayerFeeRate = useCallback(
+    async (
+      chainType: ChainType,
+      relayerFeeRate: bigint
+    ): Promise<TransactionResult> => {
+      if (chainType === ChainType.EVM) {
+        if (!evmSDK) {
+          throw new Error("EVM SDK not initialized");
+        }
+        const factory = evmSDK.getFactory();
+        const tx = await factory.setRelayerFeeRate(relayerFeeRate);
+        const receipt = await tx.wait();
+        return {
+          txHash: receipt.hash,
+          blockNumber: receipt.blockNumber,
+          blockTime: (await evmSDK.getProvider().getBlock(receipt.blockNumber))
+            ?.timestamp,
+        };
+      } else if (chainType === ChainType.SOLANA) {
+        throw new Error("Relayer fee rate is not supported on Solana");
+      }
+      throw new Error(`Unsupported chain type: ${chainType}`);
+    },
+    [evmSDK]
+  );
+
   const setStakingSeasonPeriod = useCallback(
     async (
       chainType: ChainType,
@@ -161,7 +201,8 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
           throw new Error("EVM SDK not initialized");
         }
         const factory = evmSDK.getFactory();
-        const tx = await factory.setStakingSeasonPeriod(period);
+        // Contract renamed: updateNextSeasonDuration(uint256 _duration)
+        const tx = await factory.updateNextSeasonDuration(period);
         const receipt = await tx.wait();
         return {
           txHash: receipt.hash,
@@ -187,7 +228,8 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
           throw new Error("EVM SDK not initialized");
         }
         const factory = evmSDK.getFactory();
-        const tx = await factory.startStakeSeason();
+        // Contract renamed: startSeason()
+        const tx = await factory.startSeason();
         const receipt = await tx.wait();
         return {
           txHash: receipt.hash,
@@ -211,6 +253,7 @@ export function useAdmin(config: AdminHookConfig): UseAdminReturn {
 
   return {
     setFeeRate,
+    setRelayerFeeRate,
     setStakingSeasonPeriod,
     startStakeSeason,
     isEVMReady,
