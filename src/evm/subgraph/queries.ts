@@ -22,8 +22,8 @@ export const QUERIES = {
     }
   `,
 
-  anyProtocol: `
-    query GetAnyProtocol {
+  protocolData: `
+    query GetProtocolData {
       protocols(first: 1, orderBy: updatedBlockTimestamp, orderDirection: desc) {
         id
         feeRate

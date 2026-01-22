@@ -93,8 +93,8 @@ export class AintiVirusEVMSubgraph {
   /**
    * Convenience helper when you don't know the Protocol entity id.
    */
-  async getAnyProtocol(): Promise<ProtocolState | null> {
-    const data = await this.request<{ protocols: any[] }>(QUERIES.anyProtocol);
+  async getProtocolData(): Promise<ProtocolState | null> {
+    const data = await this.request<{ protocols: any[] }>(QUERIES.protocolData);
     const p = data.protocols?.[0];
     if (!p) return null;
     return {
