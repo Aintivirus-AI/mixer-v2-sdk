@@ -1,142 +1,128 @@
 /**
- * Hook for depositing (EVM or Solana)
- * Use this hook when you only need deposit functionality
+ * Hook for depositing into mixers (EVM only for now).
+ * Generates commitment (secret/nullifier) internally. Save the returned depositData for withdrawals.
+ * Must be used inside MixerProviderWithWagmi.
+ * Solana integration commented out – pass solanaWallet + solanaConnection when re-enabled.
  */
 
-import { useCallback, useMemo } from "react";
-import { ChainType, EVMHookConfig, SolanaHookConfig } from "../types";
-import { Wallet } from "@coral-xyz/anchor";
-import { Connection } from "@solana/web3.js";
-import { AintiVirusEVM } from "../evm";
-import { AintiVirusSolana } from "../solana";
-import { TransactionResult } from "../types";
-import { useAccount, useWalletClient, usePublicClient } from "wagmi";
-import {
-  createEthersProviderFromViem,
-  createEthersSignerFromViem,
-} from "./utils";
+import { useCallback } from "react";
+import { AssetMode } from "../types";
+import type { TransactionResult, DepositData } from "../types";
+import { useAccount } from "wagmi";
+import { useMixer } from "./context";
+import { generateSecretAndNullifier, computeCommitment } from "../utils/crypto";
+import { ETH_ADDRESS } from "../evm";
 
-/**
- * Hook configuration for deposit
- */
-export interface DepositHookConfig {
-  evm?: EVMHookConfig;
-  solana?: SolanaHookConfig;
-  solanaWallet?: Wallet;
-  solanaConnection?: Connection;
+export interface DepositResult extends TransactionResult {
+  /** Save this (secret, nullifier) to generate withdrawal proof later. */
+  depositData: DepositData;
 }
 
-/**
- * Deposit hook return type
- */
 export interface UseDepositReturn {
+  /**
+   * Deposit into the mixer for the given asset and amount.
+   * Commitment is generated automatically. Returns depositData for later withdrawal.
+   * Fails if no mixer is deployed for this asset+amount.
+   */
   deposit: (
-    chainType: ChainType,
-    amount: bigint,
-    commitment: bigint
-  ) => Promise<TransactionResult>;
+    assetAddress: string,
+    amount: bigint
+  ) => Promise<DepositResult>;
+  /** Total to pay (amount + fee). Use for display or approval. */
+  calculateDepositAmount: (amount: bigint) => Promise<bigint>;
+  /** Check if a mixer is deployed for this asset and amount. */
+  mixerExists: (assetAddress: string, amount: bigint) => Promise<boolean>;
+  isReady: boolean;
   isEVMReady: boolean;
+  /** Always false; Solana integration disabled. */
   isSolanaReady: boolean;
 }
 
 /**
- * Hook for depositing funds
- * Only initializes what's needed for deposits
+ * Deposit hook. Must be used inside MixerProviderWithWagmi.
+ * EVM only: uses current chain from Provider.
  */
-export function useDeposit(config: DepositHookConfig): UseDepositReturn {
-  // EVM setup (only if EVM config provided)
+export function useDeposit(/* options?: SolanaConnectionOptions */): UseDepositReturn {
+  const mixer = useMixer();
   const { isConnected: evmConnected } = useAccount();
-  const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
 
-  const evmSDK = useMemo(() => {
-    if (!config.evm?.factoryAddress) {
-      return null;
-    }
-    if (!publicClient) {
-      return null;
-    }
-    try {
-      const provider = createEthersProviderFromViem(publicClient);
-      const signerOrProvider = walletClient
-        ? createEthersSignerFromViem(walletClient, publicClient)
-        : provider;
-      return new AintiVirusEVM(
-        config.evm.factoryAddress,
-        config.evm.tokenAddress || "0x0000000000000000000000000000000000000000", // Default to zero address if not provided
-        signerOrProvider
-      );
-    } catch (error) {
-      console.error("Failed to initialize AintiVirusEVM:", error);
-      return null;
-    }
-  }, [
-    config.evm?.factoryAddress,
-    config.evm?.tokenAddress,
-    walletClient,
-    publicClient,
-  ]);
+  const evmSDK = mixer?.getActiveEVM?.() ?? null;
+  const chainId = mixer?.chainId;
+  const evmChainIds = mixer?.evmChainIds ?? [];
+  const isSupportedEVMChain =
+    chainId != null && evmChainIds.length > 0 && evmChainIds.includes(chainId);
+  const isEVMReady = !!evmSDK && evmConnected && isSupportedEVMChain;
 
-  const isEVMReady = !!evmSDK && evmConnected;
+  // Solana integration disabled
+  const isSolanaReady = false;
 
-  // Solana setup (only if Solana config provided)
-  const solanaSDK = useMemo(() => {
-    if (
-      !config.solana?.factoryProgramId ||
-      !config.solana?.mixerProgramId ||
-      !config.solana?.stakingProgramId
-    ) {
-      return null;
-    }
-    if (!config.solanaWallet || !config.solanaConnection) {
-      return null;
-    }
-    try {
-      return new AintiVirusSolana(
-        config.solanaWallet,
-        config.solanaConnection,
-        config.solana.tokenMint
-      );
-    } catch (error) {
-      console.error("Failed to initialize AintiVirusSolana:", error);
-      return null;
-    }
-  }, [
-    config.solana?.factoryProgramId,
-    config.solana?.mixerProgramId,
-    config.solana?.stakingProgramId,
-    config.solana?.tokenMint,
-    config.solanaWallet,
-    config.solanaConnection,
-  ]);
+  const isReady = isEVMReady;
 
-  const isSolanaReady = !!solanaSDK && !!config.solanaWallet?.publicKey;
+  const mixerExists = useCallback(
+    async (assetAddress: string, amount: bigint): Promise<boolean> => {
+      if (isEVMReady && evmSDK) {
+        return evmSDK.mixerExists(assetAddress, amount);
+      }
+      // if (isSolanaReady && solanaSDK) { return solanaSDK.mixerExists(mode, amount); }
+      return false;
+    },
+    [evmSDK, isEVMReady]
+  );
 
-  // Deposit function
   const deposit = useCallback(
     async (
-      chainType: ChainType,
-      amount: bigint,
-      commitment: bigint
-    ): Promise<TransactionResult> => {
-      if (chainType === ChainType.EVM) {
-        if (!evmSDK) {
-          throw new Error("EVM SDK not initialized");
-        }
-        return evmSDK.depositEth(amount, commitment);
-      } else if (chainType === ChainType.SOLANA) {
-        if (!solanaSDK) {
-          throw new Error("Solana SDK not initialized");
-        }
-        return solanaSDK.depositSol(amount, commitment);
+      assetAddress: string,
+      amount: bigint
+    ): Promise<DepositResult> => {
+      const exists = await mixerExists(assetAddress, amount);
+      if (!exists) {
+        throw new Error(
+          "No mixer deployed for this asset and amount. Deploy a mixer first (Deploy tab)."
+        );
       }
-      throw new Error(`Unsupported chain type: ${chainType}`);
+
+      const { secret, nullifier } = generateSecretAndNullifier();
+      const commitment = computeCommitment(secret, nullifier);
+
+      if (isEVMReady && evmSDK) {
+        const isEth =
+          assetAddress.toLowerCase() === ETH_ADDRESS.toLowerCase();
+        const result = isEth
+          ? await evmSDK.depositEth(amount, commitment)
+          : await evmSDK.depositToken(amount, commitment);
+        const mode = isEth ? AssetMode.ETH : AssetMode.TOKEN;
+        return {
+          ...result,
+          depositData: { secret, nullifier, commitment, amount, mode },
+        };
+      }
+
+      // if (isSolanaReady && solanaSDK) { ... }
+      throw new Error(
+        "No active chain. Connect wallet on a supported EVM chain (from config)."
+      );
     },
-    [evmSDK, solanaSDK]
+    [evmSDK, isEVMReady, mixerExists]
+  );
+
+  const calculateDepositAmount = useCallback(
+    async (amount: bigint): Promise<bigint> => {
+      if (isEVMReady && evmSDK) {
+        return evmSDK.calculateDepositAmount(amount);
+      }
+      // if (isSolanaReady && solanaSDK) { return solanaSDK.calculateDepositAmount(amount); }
+      throw new Error(
+        "No active chain. Connect wallet on a supported EVM chain (from config)."
+      );
+    },
+    [evmSDK, isEVMReady]
   );
 
   return {
     deposit,
+    calculateDepositAmount,
+    mixerExists,
+    isReady,
     isEVMReady,
     isSolanaReady,
   };

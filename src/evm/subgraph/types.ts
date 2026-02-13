@@ -9,7 +9,7 @@ export type OrderDirection = "asc" | "desc";
 
 export type MixerPoolOrderBy =
   | "id"
-  | "mode"
+  | "asset"
   | "amount"
   | "deployedBlockNumber"
   | "deployedBlockTimestamp"
@@ -20,13 +20,6 @@ export type MixerPoolOrderBy =
 
 export type DepositOrderBy = "blockTimestamp" | "blockNumber";
 export type WithdrawalOrderBy = "blockTimestamp" | "blockNumber";
-
-/**
- * Subgraph enum `Mode` (schema.graphql):
- * - ETH (0)
- * - AINTI (1)  // token mode
- */
-export type SubgraphMode = "ETH" | "AINTI";
 
 export interface SubgraphClientConfig {
   endpoint: string;
@@ -42,7 +35,8 @@ export type { AssetMode };
 export interface ProtocolState {
   id: string;
   feeRate: bigint;
-  relayerFeeRate: bigint;
+  /** Not present in current subgraph schema; set to 0n if needed for compatibility */
+  relayerFeeRate?: bigint;
   factoryAddress?: string | null;
   stakingAddress?: string | null;
   nextSeasonDuration: bigint;
@@ -59,8 +53,8 @@ export interface ProtocolState {
 }
 
 export interface MixerPool {
-  id: string; // <mode>-<amount>
-  mode: SubgraphMode;
+  id: string; // <asset>-<amount>, asset is hex address
+  asset: string; // address as hex (ETH_ADDRESS or token)
   amount: bigint;
   address: string;
   deployedBlockNumber: bigint;
@@ -91,22 +85,10 @@ export interface WithdrawalEntity {
   transactionHash: string;
 }
 
-export interface WithdrawalRelayedEntity {
-  id: string;
-  pool: { id: string };
-  recipient: string;
-  relayer: string;
-  relayerFee: bigint;
-  nullifierHash: string;
-  blockNumber: bigint;
-  blockTimestamp: bigint;
-  transactionHash: string;
-}
-
 export interface StakedEntity {
   id: string;
   staker: string;
-  seasonMode: { id: string };
+  seasonAsset: { id: string };
   amount: bigint;
   blockNumber: bigint;
   blockTimestamp: bigint;
@@ -116,7 +98,7 @@ export interface StakedEntity {
 export interface UnstakedEntity {
   id: string;
   staker: string;
-  seasonMode: { id: string };
+  seasonAsset: { id: string };
   amount: bigint;
   blockNumber: bigint;
   blockTimestamp: bigint;
@@ -126,16 +108,17 @@ export interface UnstakedEntity {
 export interface ClaimedEntity {
   id: string;
   staker: string;
-  seasonMode: { id: string };
+  seasonAsset: { id: string };
   amount: bigint;
   blockNumber: bigint;
   blockTimestamp: bigint;
   transactionHash: string;
 }
 
-export interface SeasonModeEntity {
-  id: string; // <seasonId>-<mode>
-  mode: SubgraphMode;
+/** SeasonAsset id = <seasonId>-<asset (hex)> */
+export interface SeasonAssetEntity {
+  id: string;
+  asset: string; // address as hex
   duration: bigint;
   totalStaked: bigint;
   totalReward: bigint;
@@ -148,6 +131,5 @@ export interface SeasonEntity {
   start: bigint;
   end: bigint;
   duration: bigint;
-  modes: SeasonModeEntity[];
+  assets: SeasonAssetEntity[];
 }
-

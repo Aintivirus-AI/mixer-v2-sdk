@@ -1,8 +1,9 @@
 /**
  * AintiVirus Mixer SDK
- * Easy-to-use TypeScript SDK for privacy-preserving transactions on EVM and Solana
+ * EVM-only integration in hooks/provider; Solana config and class kept for types / future use.
  */
 
+import { JsonRpcProvider } from "ethers";
 import { SDKConfig } from "./types";
 import { AintiVirusEVM } from "./evm";
 import { AintiVirusSolana } from "./solana";
@@ -10,103 +11,86 @@ import { AintiVirusSolana } from "./solana";
 // Export types
 export * from "./types";
 
-// Export EVM SDK
-export { AintiVirusEVM };
+// Export config and multi-chain factory
+export {
+  normalizeConfig,
+  getEvmChainConfig,
+  getSolanaChainConfig,
+  getEvmChainIds,
+  getSolanaNetworks,
+} from "./config";
+export type { NormalizedMixerConfig } from "./config";
+export { createMixerSDK } from "./createSDK";
+export type { MixerSDKInstance } from "./createSDK";
+
+// Export EVM SDK and constants
+export { AintiVirusEVM, ETH_ADDRESS } from "./evm";
+
+// Export Solana SDK (class only; hooks/provider Solana integration disabled)
+export { AintiVirusSolana } from "./solana";
 
 // Export The Graph (EVM-only) client
 export * from "./evm/subgraph";
-
-// Export Solana SDK
-export { AintiVirusSolana };
 
 // Export utilities
 export * from "./utils/crypto";
 export * from "./utils/proof";
 
-// Re-export commonly used types for convenience
+// Re-export commonly used types
 export { AssetMode } from "./types";
-export type { DepositData, WithdrawalProof, TransactionResult } from "./types";
+export type { DepositData, WithdrawalProof, TransactionResult, MixerSDKConfig, EvmChainConfig, SolanaChainConfig } from "./types";
 export type { SDKConfig } from "./types";
 
+// React integration – provider and useDeploy (use "@aintivirus-ai/mixer-sdk" only)
+export {
+  MixerProviderWithWagmi,
+  MixerProviderWithWagmi as MixerProvider,
+  useMixerConfig,
+  useMixer,
+  useDeploy,
+  useDeposit,
+} from "./hooks";
+export type {
+  MixerContextValue,
+  UseDeployReturn,
+  UseDepositReturn,
+  DepositResult,
+} from "./hooks";
+
 /**
- * Main SDK class that provides a unified interface
- * Can be initialized for either EVM or Solana (or both)
+ * Main SDK class (legacy single-chain). For multi-chain use createMixerSDK() or MixerProvider.
  */
 export class AintiVirusSDK {
   public evm?: AintiVirusEVM;
   public solana?: AintiVirusSolana;
 
-  /**
-   * Initialize SDK with configuration
-   */
   constructor(config: SDKConfig) {
     if (config.evm) {
-      // Import ethers dynamically to avoid issues if not using EVM
       try {
-        const ethers = require("ethers");
         const provider =
-          config.evm.provider ||
-          (config.evm.rpcUrl
-            ? new ethers.JsonRpcProvider(config.evm.rpcUrl)
-            : null);
-
-        if (!provider) {
-          throw new Error("EVM provider or rpcUrl required");
-        }
-
-        const signer = provider instanceof ethers.Signer ? provider : null;
-        const { AintiVirusEVM } = require("./evm");
+          (config.evm as { provider?: unknown }).provider ||
+          (config.evm.rpcUrl ? new JsonRpcProvider(config.evm.rpcUrl) : null);
+        if (!provider) throw new Error("EVM provider or rpcUrl required");
+        const signer =
+          provider && typeof (provider as { signTransaction?: unknown }).signTransaction === "function"
+            ? (provider as unknown as import("ethers").Signer)
+            : null;
         this.evm = new AintiVirusEVM(
           config.evm.factoryAddress,
-          config.evm.tokenAddress,
-          signer || provider
+          config.evm.tokenAddress ?? "0x0000000000000000000000000000000000000000",
+          signer ?? (provider as import("ethers").Provider)
         );
-      } catch (error) {
-        throw new Error(`Failed to initialize EVM SDK: ${error}`);
+      } catch (err) {
+        throw new Error(`Failed to initialize EVM SDK: ${err}`);
       }
     }
-
     if (config.solana) {
-      // Import Solana dependencies dynamically
-      try {
-        const { Connection } = require("@solana/web3.js");
-
-        const connection =
-          config.solana.connection ||
-          (config.solana.rpcUrl ? new Connection(config.solana.rpcUrl) : null);
-
-        if (!connection) {
-          throw new Error("Solana connection or rpcUrl required");
-        }
-
-        // Note: Wallet must be provided when creating AintiVirusSolana instance
-        // This unified SDK class is mainly for convenience - use individual SDKs directly for better control
-        throw new Error(
-          "Solana SDK should be initialized directly. Use AintiVirusSolana class."
-        );
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          error.message.includes("Solana SDK should be initialized")
-        ) {
-          throw error;
-        }
-        throw new Error(`Failed to initialize Solana SDK: ${error}`);
-      }
+      // Solana integration disabled in hooks; legacy SDK does not support Solana
+      throw new Error(
+        "Solana in AintiVirusSDK requires connection and wallet; use createMixerSDK().getSolana(network, wallet, connection) or hooks (when Solana re-enabled)."
+      );
     }
-  }
-
-  /**
-   * Set Solana wallet (required for Solana transactions)
-   */
-  setSolanaWallet(wallet: any) {
-    if (!this.solana) {
-      throw new Error("Solana SDK not initialized");
-    }
-    // Note: This would require modifying AintiVirusSolana to accept wallet updates
-    // For now, wallet should be provided during initialization
   }
 }
 
-// Default export
-export default AintiVirusSDK;
+// No default export – use named: import { AintiVirusSDK, MixerProvider } from "@aintivirus-ai/mixer-sdk"

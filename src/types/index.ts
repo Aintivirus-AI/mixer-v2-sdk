@@ -107,25 +107,65 @@ export type StakeSeason = SolanaStakeSeason | EVMStakeSeason;
 export type StakerRecord = SolanaStakerRecord | EVMStakerRecord;
 
 /**
- * Configuration for SDK initialization
+ * Per-chain EVM config (one entry per chainId in MixerSDKConfig.chains.evm)
+ */
+export interface EvmChainConfig {
+  factoryAddress: string;
+  tokenAddress?: string;
+  rpcUrl?: string;
+  subgraphUrl?: string;
+}
+
+/**
+ * Per-network Solana config (one entry per network in MixerSDKConfig.chains.solana).
+ * Config still normalized; Solana SDK/hooks integration is disabled.
+ */
+export interface SolanaChainConfig {
+  factoryProgramId: string;
+  mixerProgramId: string;
+  stakingProgramId: string;
+  tokenMint?: string;
+  rpcUrl?: string;
+}
+
+/**
+ * Multi-chain SDK config (settings JSON shape).
+ * Use this for 5 EVM chains + Solana; pass to MixerProvider or createMixerSDK().
+ */
+export interface MixerSDKConfig {
+  chains: {
+    evm: Record<number, EvmChainConfig>;
+    solana?: Record<string, SolanaChainConfig>;
+  };
+  useMulticall?: boolean;
+}
+
+/**
+ * Configuration for SDK initialization (legacy single-chain)
  */
 export interface SDKConfig {
-  // EVM Configuration
+  // Legacy: single EVM chain
   evm?: {
     factoryAddress: string;
-    tokenAddress: string;
+    tokenAddress?: string;
     rpcUrl?: string;
-    provider?: any; // ethers.Provider
+    provider?: unknown;
   };
-  // Solana Configuration
+  // Legacy: single Solana network
   solana?: {
     factoryProgramId: string;
     mixerProgramId: string;
     stakingProgramId: string;
     tokenMint?: string;
     rpcUrl?: string;
-    connection?: any; // Connection
+    connection?: unknown;
   };
+  // Multi-chain (when set, takes precedence; evm/solana used for backward compat)
+  chains?: {
+    evm?: Record<number, EvmChainConfig>;
+    solana?: Record<string, SolanaChainConfig>;
+  };
+  useMulticall?: boolean;
 }
 
 /**
@@ -146,7 +186,7 @@ export interface EVMHookConfig {
 }
 
 /**
- * Hook configuration for Solana
+ * Hook configuration for Solana (Solana integration disabled in hooks).
  */
 export interface SolanaHookConfig {
   factoryProgramId: string;

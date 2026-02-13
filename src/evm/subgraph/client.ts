@@ -8,17 +8,15 @@ import {
   type MixerPoolOrderBy,
   type OrderDirection,
   type ProtocolState,
+  type SeasonAssetEntity,
   type SeasonEntity,
-  type SeasonModeEntity,
   type StakedEntity,
   type SubgraphClientConfig,
-  type SubgraphMode,
   type UnstakedEntity,
   type WithdrawalEntity,
   type WithdrawalOrderBy,
-  type WithdrawalRelayedEntity,
 } from "./types";
-import { asBigint, requireFetch, toSubgraphMode } from "./utils";
+import { asBigint, assetFromMode, getPoolId as getPoolIdUtil, requireFetch } from "./utils";
 
 export class AintiVirusEVMSubgraph {
   private readonly endpoint: string;
@@ -71,7 +69,7 @@ export class AintiVirusEVMSubgraph {
     return {
       id: p.id,
       feeRate: asBigint(p.feeRate),
-      relayerFeeRate: asBigint(p.relayerFeeRate),
+      relayerFeeRate: 0n,
       factoryAddress: p.factoryAddress ?? null,
       stakingAddress: p.stakingAddress ?? null,
       nextSeasonDuration: asBigint(p.nextSeasonDuration),
@@ -100,7 +98,7 @@ export class AintiVirusEVMSubgraph {
     return {
       id: p.id,
       feeRate: asBigint(p.feeRate),
-      relayerFeeRate: asBigint(p.relayerFeeRate),
+      relayerFeeRate: 0n,
       factoryAddress: p.factoryAddress ?? null,
       stakingAddress: p.stakingAddress ?? null,
       nextSeasonDuration: asBigint(p.nextSeasonDuration),
@@ -120,24 +118,24 @@ export class AintiVirusEVMSubgraph {
   }
 
   /**
-   * Mixer pools (mode + fixed amount).
+   * Mixer pools (asset address + fixed amount). Schema id: `<asset>-<amount>`.
    */
   async getMixerPools(params?: {
     first?: number;
     skip?: number;
-    mode?: SubgraphMode;
+    asset?: string;
     orderBy?: MixerPoolOrderBy;
     orderDirection?: OrderDirection;
   }): Promise<MixerPool[]> {
     const {
       first = 50,
       skip = 0,
-      mode,
+      asset,
       orderBy = "deployedBlockTimestamp",
       orderDirection = "desc",
     } = params ?? {};
 
-    const where = mode ? { mode } : {};
+    const where = asset ? { asset: asset.toLowerCase() } : {};
 
     const data = await this.request<{ mixerPools: any[] }>(QUERIES.mixerPools, {
       first,
@@ -149,12 +147,15 @@ export class AintiVirusEVMSubgraph {
 
     return (data.mixerPools ?? []).map((p) => ({
       id: p.id,
-      mode: p.mode,
+      asset: typeof p.asset === "string" ? p.asset : String(p.asset),
       amount: asBigint(p.amount),
-      address: p.address,
+      address: typeof p.address === "string" ? p.address : String(p.address),
       deployedBlockNumber: asBigint(p.deployedBlockNumber),
       deployedBlockTimestamp: asBigint(p.deployedBlockTimestamp),
-      deployedTransactionHash: p.deployedTransactionHash,
+      deployedTransactionHash:
+        typeof p.deployedTransactionHash === "string"
+          ? p.deployedTransactionHash
+          : String(p.deployedTransactionHash),
       totalDeposited: asBigint(p.totalDeposited),
       totalWithdrawn: asBigint(p.totalWithdrawn),
       depositCount: asBigint(p.depositCount),
@@ -163,17 +164,21 @@ export class AintiVirusEVMSubgraph {
   }
 
   /**
-   * Pool id is defined by schema as: `<mode>-<amount>`.
+   * Pool id in subgraph: `<asset>-<amount>` (asset = hex address).
    */
-  getPoolId(mode: SubgraphMode, amount: bigint): string {
-    return `${mode}-${amount.toString()}`;
+  getPoolId(asset: string, amount: bigint): string {
+    return getPoolIdUtil(asset, amount);
   }
 
   /**
-   * Convenience for SDK callers that use AssetMode.
+   * Convenience for SDK callers that use AssetMode. For TOKEN mode, pass tokenAddress.
    */
-  getPoolIdFromAssetMode(mode: AssetMode, amount: bigint): string {
-    return this.getPoolId(toSubgraphMode(mode), amount);
+  getPoolIdFromAssetMode(
+    mode: AssetMode,
+    amount: bigint,
+    tokenAddress?: string
+  ): string {
+    return getPoolIdUtil(assetFromMode(mode, tokenAddress), amount);
   }
 
   async getMixerPoolById(id: string): Promise<MixerPool | null> {
@@ -185,12 +190,15 @@ export class AintiVirusEVMSubgraph {
     if (!p) return null;
     return {
       id: p.id,
-      mode: p.mode,
+      asset: typeof p.asset === "string" ? p.asset : String(p.asset),
       amount: asBigint(p.amount),
-      address: p.address,
+      address: typeof p.address === "string" ? p.address : String(p.address),
       deployedBlockNumber: asBigint(p.deployedBlockNumber),
       deployedBlockTimestamp: asBigint(p.deployedBlockTimestamp),
-      deployedTransactionHash: p.deployedTransactionHash,
+      deployedTransactionHash:
+        typeof p.deployedTransactionHash === "string"
+          ? p.deployedTransactionHash
+          : String(p.deployedTransactionHash),
       totalDeposited: asBigint(p.totalDeposited),
       totalWithdrawn: asBigint(p.totalWithdrawn),
       depositCount: asBigint(p.depositCount),
@@ -266,51 +274,11 @@ export class AintiVirusEVMSubgraph {
     return (data.withdrawals ?? []).map((w) => ({
       id: w.id,
       pool: { id: w.pool?.id },
-      to: w.to,
-      nullifierHash: w.nullifierHash,
+      to: typeof w.to === "string" ? w.to : String(w.to),
+      nullifierHash: typeof w.nullifierHash === "string" ? w.nullifierHash : String(w.nullifierHash),
       blockNumber: asBigint(w.blockNumber),
       blockTimestamp: asBigint(w.blockTimestamp),
-      transactionHash: w.transactionHash,
-    }));
-  }
-
-  async getWithdrawalsRelayed(params: {
-    poolId?: string;
-    recipient?: string;
-    relayer?: string;
-    first?: number;
-    skip?: number;
-    orderDirection?: OrderDirection;
-  }): Promise<WithdrawalRelayedEntity[]> {
-    const {
-      poolId,
-      recipient,
-      relayer,
-      first = 50,
-      skip = 0,
-      orderDirection = "desc",
-    } = params ?? {};
-
-    const where: any = {};
-    if (poolId) where.pool = poolId;
-    if (recipient) where.recipient = recipient.toLowerCase();
-    if (relayer) where.relayer = relayer.toLowerCase();
-
-    const data = await this.request<{ withdrawalRelayeds: any[] }>(
-      QUERIES.withdrawalsRelayed,
-      { first, skip, where, orderDirection }
-    );
-
-    return (data.withdrawalRelayeds ?? []).map((w) => ({
-      id: w.id,
-      pool: { id: w.pool?.id },
-      recipient: w.recipient,
-      relayer: w.relayer,
-      relayerFee: asBigint(w.relayerFee),
-      nullifierHash: w.nullifierHash,
-      blockNumber: asBigint(w.blockNumber),
-      blockTimestamp: asBigint(w.blockTimestamp),
-      transactionHash: w.transactionHash,
+      transactionHash: typeof w.transactionHash === "string" ? w.transactionHash : String(w.transactionHash),
     }));
   }
 
@@ -326,27 +294,27 @@ export class AintiVirusEVMSubgraph {
       start: asBigint(s.start),
       end: asBigint(s.end),
       duration: asBigint(s.duration),
-      modes: (s.modes ?? []).map((m: any) => ({
-        id: m.id,
-        mode: m.mode,
-        duration: asBigint(m.duration),
-        totalStaked: asBigint(m.totalStaked),
-        totalReward: asBigint(m.totalReward),
-        totalWeight: asBigint(m.totalWeight),
+      assets: (s.assets ?? []).map((a: any) => ({
+        id: a.id,
+        asset: typeof a.asset === "string" ? a.asset : String(a.asset),
+        duration: asBigint(a.duration),
+        totalStaked: asBigint(a.totalStaked),
+        totalReward: asBigint(a.totalReward),
+        totalWeight: asBigint(a.totalWeight),
       })),
     };
   }
 
-  async getSeasonModes(params?: {
+  async getSeasonAssets(params?: {
     seasonId?: bigint;
-    mode?: SubgraphMode;
+    asset?: string;
     first?: number;
     skip?: number;
     orderDirection?: OrderDirection;
-  }): Promise<SeasonModeEntity[]> {
+  }): Promise<SeasonAssetEntity[]> {
     const {
       seasonId,
-      mode,
+      asset,
       first = 50,
       skip = 0,
       orderDirection = "desc",
@@ -354,35 +322,33 @@ export class AintiVirusEVMSubgraph {
 
     const where: any = {};
     if (seasonId !== undefined) where.season = seasonId.toString();
-    if (mode) where.mode = mode;
+    if (asset) where.asset = asset.toLowerCase();
 
-    const data = await this.request<{ seasonModes: any[] }>(QUERIES.seasonModes, {
-      first,
-      skip,
-      where,
-      orderDirection,
-    });
+    const data = await this.request<{ seasonAssets: any[] }>(
+      QUERIES.seasonAssets,
+      { first, skip, where, orderDirection }
+    );
 
-    return (data.seasonModes ?? []).map((m) => ({
-      id: m.id,
-      mode: m.mode,
-      duration: asBigint(m.duration),
-      totalStaked: asBigint(m.totalStaked),
-      totalReward: asBigint(m.totalReward),
-      totalWeight: asBigint(m.totalWeight),
+    return (data.seasonAssets ?? []).map((a) => ({
+      id: a.id,
+      asset: typeof a.asset === "string" ? a.asset : String(a.asset),
+      duration: asBigint(a.duration),
+      totalStaked: asBigint(a.totalStaked),
+      totalReward: asBigint(a.totalReward),
+      totalWeight: asBigint(a.totalWeight),
     }));
   }
 
   async getStakedEvents(params?: {
     staker?: string;
-    seasonModeId?: string;
+    seasonAssetId?: string;
     first?: number;
     skip?: number;
     orderDirection?: OrderDirection;
   }): Promise<StakedEntity[]> {
     const {
       staker,
-      seasonModeId,
+      seasonAssetId,
       first = 50,
       skip = 0,
       orderDirection = "desc",
@@ -390,7 +356,7 @@ export class AintiVirusEVMSubgraph {
 
     const where: any = {};
     if (staker) where.staker = staker.toLowerCase();
-    if (seasonModeId) where.seasonMode = seasonModeId;
+    if (seasonAssetId) where.seasonAsset = seasonAssetId;
 
     const data = await this.request<{ stakeds: any[] }>(QUERIES.stakedEvents, {
       first,
@@ -402,7 +368,7 @@ export class AintiVirusEVMSubgraph {
     return (data.stakeds ?? []).map((e) => ({
       id: e.id,
       staker: e.staker,
-      seasonMode: { id: e.seasonMode?.id },
+      seasonAsset: { id: e.seasonAsset?.id },
       amount: asBigint(e.amount),
       blockNumber: asBigint(e.blockNumber),
       blockTimestamp: asBigint(e.blockTimestamp),
@@ -412,14 +378,14 @@ export class AintiVirusEVMSubgraph {
 
   async getUnstakedEvents(params?: {
     staker?: string;
-    seasonModeId?: string;
+    seasonAssetId?: string;
     first?: number;
     skip?: number;
     orderDirection?: OrderDirection;
   }): Promise<UnstakedEntity[]> {
     const {
       staker,
-      seasonModeId,
+      seasonAssetId,
       first = 50,
       skip = 0,
       orderDirection = "desc",
@@ -427,7 +393,7 @@ export class AintiVirusEVMSubgraph {
 
     const where: any = {};
     if (staker) where.staker = staker.toLowerCase();
-    if (seasonModeId) where.seasonMode = seasonModeId;
+    if (seasonAssetId) where.seasonAsset = seasonAssetId;
 
     const data = await this.request<{ unstakeds: any[] }>(QUERIES.unstakedEvents, {
       first,
@@ -439,7 +405,7 @@ export class AintiVirusEVMSubgraph {
     return (data.unstakeds ?? []).map((e) => ({
       id: e.id,
       staker: e.staker,
-      seasonMode: { id: e.seasonMode?.id },
+      seasonAsset: { id: e.seasonAsset?.id },
       amount: asBigint(e.amount),
       blockNumber: asBigint(e.blockNumber),
       blockTimestamp: asBigint(e.blockTimestamp),
@@ -449,14 +415,14 @@ export class AintiVirusEVMSubgraph {
 
   async getClaimedEvents(params?: {
     staker?: string;
-    seasonModeId?: string;
+    seasonAssetId?: string;
     first?: number;
     skip?: number;
     orderDirection?: OrderDirection;
   }): Promise<ClaimedEntity[]> {
     const {
       staker,
-      seasonModeId,
+      seasonAssetId,
       first = 50,
       skip = 0,
       orderDirection = "desc",
@@ -464,7 +430,7 @@ export class AintiVirusEVMSubgraph {
 
     const where: any = {};
     if (staker) where.staker = staker.toLowerCase();
-    if (seasonModeId) where.seasonMode = seasonModeId;
+    if (seasonAssetId) where.seasonAsset = seasonAssetId;
 
     const data = await this.request<{ claimeds: any[] }>(QUERIES.claimedEvents, {
       first,
@@ -476,7 +442,7 @@ export class AintiVirusEVMSubgraph {
     return (data.claimeds ?? []).map((e) => ({
       id: e.id,
       staker: e.staker,
-      seasonMode: { id: e.seasonMode?.id },
+      seasonAsset: { id: e.seasonAsset?.id },
       amount: asBigint(e.amount),
       blockNumber: asBigint(e.blockNumber),
       blockTimestamp: asBigint(e.blockTimestamp),

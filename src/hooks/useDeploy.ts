@@ -1,145 +1,67 @@
 /**
- * Hook for deploying mixers (EVM or Solana)
- * Use this hook when you need to deploy new mixer instances
+ * Hook for deploying mixers (EVM only for now).
+ * All SDK instances come from MixerProvider. EVM uses current chain (must be a supported chain).
+ * Solana integration commented out – pass solanaWallet + solanaConnection when re-enabled.
  */
 
-import { useCallback, useMemo } from "react";
-import { ChainType, EVMHookConfig, SolanaHookConfig, AssetMode } from "../types";
-import { Wallet } from "@coral-xyz/anchor";
-import { Connection } from "@solana/web3.js";
-import { AintiVirusEVM } from "../evm";
-import { AintiVirusSolana } from "../solana";
-import { TransactionResult } from "../types";
-import { useAccount, useWalletClient, usePublicClient } from "wagmi";
-import {
-  createEthersProviderFromViem,
-  createEthersSignerFromViem,
-} from "./utils";
+import { useCallback } from "react";
+import { useAccount } from "wagmi";
+import { useMixer } from "./context";
 
-/**
- * Hook configuration for deploy
- */
-export interface DeployHookConfig {
-  evm?: EVMHookConfig;
-  solana?: SolanaHookConfig;
-  solanaWallet?: Wallet;
-  solanaConnection?: Connection;
-}
+// export type { SolanaConnectionOptions }; // Reserved for future Solana support
 
-/**
- * Deploy hook return type
- */
 export interface UseDeployReturn {
+  /** Deploy on the current active chain (from provider/config). */
   deployMixer: (
-    chainType: ChainType,
-    mode: AssetMode,
+    assetAddress: string,
     amount: bigint
-  ) => Promise<TransactionResult & { mixerAddress?: string }>;
+  ) => Promise<import("../types").TransactionResult & { mixerAddress?: string }>;
+  /** True when connected on a supported EVM chain. */
+  isReady: boolean;
   isEVMReady: boolean;
+  /** Always false; Solana integration disabled. */
   isSolanaReady: boolean;
 }
 
 /**
- * Hook for deploying mixers
- * Only initializes what's needed for deployment
+ * Deploy hook. Must be used inside MixerProviderWithWagmi.
+ * EVM only: uses current chain from Provider (must be a supported chain ID).
  */
-export function useDeploy(config: DeployHookConfig): UseDeployReturn {
-  // EVM setup
+export function useDeploy(/* options?: SolanaConnectionOptions */): UseDeployReturn {
+  const mixer = useMixer();
   const { isConnected: evmConnected } = useAccount();
-  const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
 
-  const evmSDK = useMemo(() => {
-    if (!config.evm?.factoryAddress) {
-      return null;
-    }
-    if (!publicClient) {
-      return null;
-    }
-    try {
-      const provider = createEthersProviderFromViem(publicClient);
-      const signerOrProvider = walletClient
-        ? createEthersSignerFromViem(walletClient, publicClient)
-        : provider;
-      return new AintiVirusEVM(
-        config.evm.factoryAddress,
-        config.evm.tokenAddress || "0x0000000000000000000000000000000000000000",
-        signerOrProvider
-      );
-    } catch (error) {
-      console.error("Failed to initialize AintiVirusEVM:", error);
-      return null;
-    }
-  }, [
-    config.evm?.factoryAddress,
-    config.evm?.tokenAddress,
-    walletClient,
-    publicClient,
-  ]);
+  const evmSDK = mixer?.getActiveEVM?.() ?? null;
+  const chainId = mixer?.chainId;
+  const evmChainIds = mixer?.evmChainIds ?? [];
+  const isSupportedEVMChain =
+    chainId != null && evmChainIds.length > 0 && evmChainIds.includes(chainId);
+  const isEVMReady = !!evmSDK && evmConnected && isSupportedEVMChain;
 
-  const isEVMReady = !!evmSDK && evmConnected;
+  // Solana integration disabled – no solanaWallet/solanaConnection passed
+  // const solanaSDK = useMemo(() => { ... }, [options, ...]);
+  const isSolanaReady = false;
 
-  // Solana setup
-  const solanaSDK = useMemo(() => {
-    if (
-      !config.solana?.factoryProgramId ||
-      !config.solana?.mixerProgramId ||
-      !config.solana?.stakingProgramId
-    ) {
-      return null;
-    }
-    if (!config.solanaWallet || !config.solanaConnection) {
-      return null;
-    }
-    try {
-      return new AintiVirusSolana(
-        config.solanaWallet,
-        config.solanaConnection,
-        config.solana.tokenMint
-      );
-    } catch (error) {
-      console.error("Failed to initialize AintiVirusSolana:", error);
-      return null;
-    }
-  }, [
-    config.solana?.factoryProgramId,
-    config.solana?.mixerProgramId,
-    config.solana?.stakingProgramId,
-    config.solana?.tokenMint,
-    config.solanaWallet,
-    config.solanaConnection,
-  ]);
+  const isReady = isEVMReady; // was: Boolean(isEVMReady || isSolanaReady)
 
-  const isSolanaReady = !!solanaSDK && !!config.solanaWallet?.publicKey;
-
-  // Deploy mixer function
   const deployMixer = useCallback(
     async (
-      chainType: ChainType,
-      mode: AssetMode,
+      assetAddress: string,
       amount: bigint
-    ): Promise<TransactionResult & { mixerAddress?: string }> => {
-      if (chainType === ChainType.EVM) {
-        if (!evmSDK) {
-          throw new Error("EVM SDK not initialized");
-        }
-        return evmSDK.deployMixer(mode, amount);
-      } else if (chainType === ChainType.SOLANA) {
-        if (!solanaSDK) {
-          throw new Error("Solana SDK not initialized");
-        }
-        const result = await solanaSDK.deployMixer(mode, amount);
-        return result;
+    ): Promise<import("../types").TransactionResult & { mixerAddress?: string }> => {
+      if (isEVMReady && evmSDK) {
+        return evmSDK.deployMixer(assetAddress, amount);
       }
-      throw new Error(`Unsupported chain type: ${chainType}`);
+      // if (isSolanaReady && solanaSDK) { return solanaSDK.deployMixer(mode, amount); }
+      throw new Error("No active chain. Connect wallet on a supported EVM chain (from config).");
     },
-    [evmSDK, solanaSDK]
+    [evmSDK, isEVMReady]
   );
 
   return {
     deployMixer,
+    isReady,
     isEVMReady,
     isSolanaReady,
   };
 }
-

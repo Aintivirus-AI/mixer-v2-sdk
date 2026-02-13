@@ -1,41 +1,24 @@
 /**
- * React hooks for AintiVirus Mixer SDK
- * Optimized for Next.js integration with EVM and Solana support
- *
- * Use individual hooks for better code splitting:
- * - useDeposit: Only for deposits
- * - useStake: Only for staking/unstaking
- * - useClaim: Only for claiming rewards
- * - useWithdraw: Only for withdrawals
- * - useAintiVirus: All-in-one hook (if you need everything)
+ * React hooks for AintiVirus Mixer SDK (EVM only for now).
+ * All hooks must be used inside MixerProviderWithWagmi. SDK instances and config come from the Provider.
+ * Solana integration disabled – SolanaConnectionOptions commented out in context.
  */
 
-// Individual hooks (recommended for code splitting)
-export { useDeposit } from "./useDeposit";
-export type { DepositHookConfig, UseDepositReturn } from "./useDeposit";
-
-export { useStake } from "./useStake";
-export type { StakeHookConfig, UseStakeReturn } from "./useStake";
-
-export { useClaim } from "./useClaim";
-export type { ClaimHookConfig, UseClaimReturn } from "./useClaim";
-
-export { useWithdraw } from "./useWithdraw";
-export type { WithdrawHookConfig, UseWithdrawReturn } from "./useWithdraw";
-
-export { useView } from "./useView";
-export type { ViewHookConfig, UseViewReturn } from "./useView";
+export {
+  MixerProviderWithWagmi,
+  MixerProviderWithWagmi as MixerProvider,
+  useMixerConfig,
+  useMixer,
+} from "./context";
+export type { MixerContextValue } from "./context";
+// export type { SolanaConnectionOptions } from "./context"; // Reserved for future Solana
 
 export { useDeploy } from "./useDeploy";
-export type { DeployHookConfig, UseDeployReturn } from "./useDeploy";
+export type { UseDeployReturn } from "./useDeploy";
 
-export { useAdmin } from "./useAdmin";
-export type { AdminHookConfig, UseAdminReturn } from "./useAdmin";
+export { useDeposit } from "./useDeposit";
+export type { UseDepositReturn, DepositResult } from "./useDeposit";
 
-// Unified hook (supports both EVM and Solana - use if you need all functions)
-export { useAintiVirus } from "./useAintiVirus";
-export type { UnifiedHookConfig, UseAintiVirusReturn } from "./useAintiVirus";
-
-// Re-export types
 export { ChainType, AssetMode } from "../types";
-export type { EVMHookConfig, SolanaHookConfig } from "../types";
+export type { EVMHookConfig } from "../types";
+// export type { SolanaHookConfig } from "../types"; // Solana integration disabled

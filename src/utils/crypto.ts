@@ -1,5 +1,12 @@
 import { poseidon2 } from "poseidon-lite";
-import { randomBytes } from "ethers";
+import { getBytes, randomBytes, toBigInt, toBeHex, zeroPadValue } from "ethers";
+
+/** Uint8Array to hex string (browser-safe, no Node Buffer) */
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 /**
  * Generate secret and nullifier for a deposit
@@ -10,8 +17,8 @@ export function generateSecretAndNullifier(): {
 } {
   const secretBytes = randomBytes(32);
   const nullifierBytes = randomBytes(32);
-  const secret = BigInt("0x" + Buffer.from(secretBytes).toString("hex"));
-  const nullifier = BigInt("0x" + Buffer.from(nullifierBytes).toString("hex"));
+  const secret = BigInt("0x" + bytesToHex(secretBytes));
+  const nullifier = BigInt("0x" + bytesToHex(nullifierBytes));
   return { secret, nullifier };
 }
 
@@ -33,13 +40,12 @@ export function computeNullifierHash(nullifier: bigint): bigint {
  * Convert bigint to bytes32 (for EVM)
  */
 export function bigIntToBytes32(value: bigint): string {
-  return "0x" + value.toString(16).padStart(64, "0");
+  return zeroPadValue(toBeHex(value), 32);
 }
 
 /**
  * Convert bytes32 to bigint (for EVM)
  */
 export function bytes32ToBigInt(value: string): bigint {
-  return BigInt(value);
+  return toBigInt(getBytes(value));
 }
-

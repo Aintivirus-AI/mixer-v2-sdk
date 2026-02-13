@@ -18,6 +18,7 @@ import type { AintivirusFactory } from "./types/aintivirus_factory";
 import type { AintivirusMixer } from "./types/aintivirus_mixer";
 import type { AintivirusStaking } from "./types/aintivirus_staking";
 
+import { Buffer } from "buffer";
 /**
  * Solana SDK for AintiVirus Mixer
  */
@@ -32,7 +33,7 @@ export class AintiVirusSolana {
   constructor(
     wallet: anchor.Wallet,
     connection: Connection,
-    tokenMint?: string
+    tokenMint?: string,
   ) {
     this.connection = connection;
     this.wallet = wallet;
@@ -47,11 +48,11 @@ export class AintiVirusSolana {
     // Import IDL files directly
     // Ensure metadata.address is set for Anchor 0.32.1
     const factoryIdl = this.ensureIdlAddress(
-      factoryIdlJson
+      factoryIdlJson,
     ) as AintivirusFactory;
     const mixerIdl = this.ensureIdlAddress(mixerIdlJson) as AintivirusMixer;
     const stakingIdl = this.ensureIdlAddress(
-      stakingIdlJson
+      stakingIdlJson,
     ) as AintivirusStaking;
 
     // Initialize programs with IDLs
@@ -77,7 +78,7 @@ export class AintiVirusSolana {
     const programAddress = idlJson.address || idlJson.metadata?.address;
     if (!programAddress) {
       throw new Error(
-        `IDL missing program address. Expected 'address' field at top level or in metadata.`
+        `IDL missing program address. Expected 'address' field at top level or in metadata.`,
       );
     }
 
@@ -104,7 +105,7 @@ export class AintiVirusSolana {
   private getFactoryPda(): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("factory")],
-      this.factoryProgram.programId
+      this.factoryProgram.programId,
     );
   }
 
@@ -113,13 +114,13 @@ export class AintiVirusSolana {
    */
   private getMixerPoolPda(
     mode: AssetMode,
-    amount: bigint
+    amount: bigint,
   ): [PublicKey, number] {
     const amountBuffer = Buffer.allocUnsafe(8);
     amountBuffer.writeBigUInt64LE(amount, 0);
     return PublicKey.findProgramAddressSync(
       [Buffer.from("mixer_pool"), Buffer.from([mode]), amountBuffer],
-      this.factoryProgram.programId
+      this.factoryProgram.programId,
     );
   }
 
@@ -128,13 +129,13 @@ export class AintiVirusSolana {
    */
   private getMixerConfigPda(
     mode: AssetMode,
-    amount: bigint
+    amount: bigint,
   ): [PublicKey, number] {
     const amountBuffer = Buffer.allocUnsafe(8);
     amountBuffer.writeBigUInt64LE(amount, 0);
     return PublicKey.findProgramAddressSync(
       [Buffer.from("mixer_config"), Buffer.from([mode]), amountBuffer],
-      this.mixerProgram.programId
+      this.mixerProgram.programId,
     );
   }
 
@@ -144,7 +145,7 @@ export class AintiVirusSolana {
   private getMerkleTreePda(mixerConfigPda: PublicKey): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("merkle_tree"), mixerConfigPda.toBuffer()],
-      this.mixerProgram.programId
+      this.mixerProgram.programId,
     );
   }
 
@@ -154,7 +155,7 @@ export class AintiVirusSolana {
   private getVaultSolPda(): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("vault"), Buffer.from("sol")],
-      this.factoryProgram.programId
+      this.factoryProgram.programId,
     );
   }
 
@@ -164,7 +165,7 @@ export class AintiVirusSolana {
   private getStakingPda(): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("staking")],
-      this.stakingProgram.programId
+      this.stakingProgram.programId,
     );
   }
 
@@ -176,7 +177,7 @@ export class AintiVirusSolana {
     seasonIdBuffer.writeBigUInt64LE(seasonId, 0);
     return PublicKey.findProgramAddressSync(
       [Buffer.from("stake_season"), seasonIdBuffer],
-      this.stakingProgram.programId
+      this.stakingProgram.programId,
     );
   }
 
@@ -186,7 +187,7 @@ export class AintiVirusSolana {
   private getStakerRecordPda(staker: PublicKey): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("staker_record"), staker.toBuffer()],
-      this.stakingProgram.programId
+      this.stakingProgram.programId,
     );
   }
 
@@ -196,7 +197,7 @@ export class AintiVirusSolana {
   private getSeasonClaimedPda(
     staker: PublicKey,
     seasonId: bigint,
-    mode: AssetMode = AssetMode.SOL
+    mode: AssetMode = AssetMode.SOL,
   ): [PublicKey, number] {
     const seasonIdBuffer = Buffer.allocUnsafe(8);
     seasonIdBuffer.writeBigUInt64LE(seasonId, 0);
@@ -207,7 +208,7 @@ export class AintiVirusSolana {
         seasonIdBuffer,
         Buffer.from([mode]),
       ],
-      this.stakingProgram.programId
+      this.stakingProgram.programId,
     );
   }
 
@@ -221,7 +222,7 @@ export class AintiVirusSolana {
   private async hasClaimed(
     address: string,
     seasonId: bigint,
-    mode: AssetMode
+    mode: AssetMode,
   ): Promise<boolean> {
     const stakerPubkey = new PublicKey(address);
     const [claimPda] = this.getSeasonClaimedPda(stakerPubkey, seasonId, mode);
@@ -240,7 +241,7 @@ export class AintiVirusSolana {
   private getCommitmentCheckerPda(commitment: Buffer): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("commitment"), commitment],
-      this.mixerProgram.programId
+      this.mixerProgram.programId,
     );
   }
 
@@ -248,11 +249,11 @@ export class AintiVirusSolana {
    * Get nullifier hash checker PDA
    */
   private getNullifierHashCheckerPda(
-    nullifierHash: Buffer
+    nullifierHash: Buffer,
   ): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [Buffer.from("nullifier_hash"), nullifierHash],
-      this.mixerProgram.programId
+      this.mixerProgram.programId,
     );
   }
 
@@ -294,7 +295,7 @@ export class AintiVirusSolana {
    */
   async depositSol(
     amount: bigint,
-    commitment: bigint
+    commitment: bigint,
   ): Promise<TransactionResult> {
     const [factoryPda] = this.getFactoryPda();
 
@@ -308,14 +309,13 @@ export class AintiVirusSolana {
       this.getCommitmentCheckerPda(commitmentBytes);
 
     // Get token mint from factory account
-    const factoryAccount = await this.factoryProgram.account.factory.fetch(
-      factoryPda
-    );
+    const factoryAccount =
+      await this.factoryProgram.account.factory.fetch(factoryPda);
     const tokenMint = new PublicKey(factoryAccount.mint);
     const vaultTokenAccount = getAssociatedTokenAddressSync(
       tokenMint,
       factoryPda,
-      true
+      true,
     );
 
     try {
@@ -324,7 +324,7 @@ export class AintiVirusSolana {
         .deposit(
           AssetMode.SOL,
           new anchor.BN(amount.toString()),
-          commitmentArray
+          commitmentArray,
         )
         .accounts({
           commitmentChecker: commitmentCheckerPda as PublicKey,
@@ -351,7 +351,7 @@ export class AintiVirusSolana {
       const errorMsg = error?.message || String(error);
       console.error(
         "[depositSol] ✗ Error preparing/sending transaction:",
-        errorMsg
+        errorMsg,
       );
       if (error?.stack) {
         console.error("[depositSol] Stack trace:", error.stack);
@@ -368,7 +368,7 @@ export class AintiVirusSolana {
    */
   async depositToken(
     amount: bigint,
-    commitment: bigint
+    commitment: bigint,
   ): Promise<TransactionResult> {
     if (!this.tokenMint) {
       throw new Error("Token mint not configured");
@@ -381,13 +381,13 @@ export class AintiVirusSolana {
 
     const userTokenAccount = await getAssociatedTokenAddress(
       this.tokenMint,
-      this.wallet.publicKey
+      this.wallet.publicKey,
     );
 
     const vaultTokenAccount = await getAssociatedTokenAddress(
       this.tokenMint,
       factoryPda,
-      true // allowOwnerOffCurve
+      true, // allowOwnerOffCurve
     );
 
     // Convert commitment bigint to 32-byte buffer (same as reference implementation)
@@ -400,7 +400,7 @@ export class AintiVirusSolana {
       .deposit(
         AssetMode.TOKEN,
         new anchor.BN(amount.toString()),
-        Array.from(commitmentBytes)
+        Array.from(commitmentBytes),
       )
       .accounts({
         vaultTokenAccount: vaultTokenAccount,
@@ -432,7 +432,7 @@ export class AintiVirusSolana {
     nullifierHash: bigint,
     amount: bigint,
     mode: AssetMode,
-    recipient?: PublicKey
+    recipient?: PublicKey,
   ): Promise<TransactionResult> {
     const [factoryPda] = this.getFactoryPda();
     const [vaultSolPda] = this.getVaultSolPda();
@@ -452,12 +452,12 @@ export class AintiVirusSolana {
     if (mode === AssetMode.TOKEN && this.tokenMint) {
       recipientTokenAccount = await getAssociatedTokenAddress(
         this.tokenMint,
-        recipientPubkey
+        recipientPubkey,
       );
       vaultTokenAccount = await getAssociatedTokenAddress(
         this.tokenMint,
         factoryPda,
-        true
+        true,
       );
     }
 
@@ -466,7 +466,7 @@ export class AintiVirusSolana {
         mode,
         new anchor.BN(amount.toString()),
         instructionData, // Buffer type
-        Array.from(nullifierHashBytes)
+        Array.from(nullifierHashBytes),
       )
       .accounts({
         mixerPool: mixerPoolPda,
@@ -529,12 +529,12 @@ export class AintiVirusSolana {
 
     const userTokenAccount = await getAssociatedTokenAddress(
       this.tokenMint,
-      this.wallet.publicKey
+      this.wallet.publicKey,
     );
     const vaultTokenAccount = await getAssociatedTokenAddress(
       this.tokenMint,
       factoryPda,
-      true
+      true,
     );
 
     const tx = await this.factoryProgram.methods
@@ -565,7 +565,7 @@ export class AintiVirusSolana {
   async claimSol(seasonId: bigint): Promise<TransactionResult> {
     const [seasonClaimedPda] = this.getSeasonClaimedPda(
       this.wallet.publicKey,
-      seasonId
+      seasonId,
     );
 
     const tx = await this.factoryProgram.methods
@@ -601,17 +601,17 @@ export class AintiVirusSolana {
     const [seasonClaimedPda] = this.getSeasonClaimedPda(
       this.wallet.publicKey,
       seasonId,
-      AssetMode.TOKEN
+      AssetMode.TOKEN,
     );
 
     const stakerTokenAccount = await getAssociatedTokenAddress(
       this.tokenMint,
-      this.wallet.publicKey
+      this.wallet.publicKey,
     );
     const vaultTokenAccount = await getAssociatedTokenAddress(
       this.tokenMint,
       factoryPda,
-      true
+      true,
     );
 
     const tx = await this.factoryProgram.methods
@@ -670,12 +670,12 @@ export class AintiVirusSolana {
 
     const recipientTokenAccount = await getAssociatedTokenAddress(
       this.tokenMint,
-      this.wallet.publicKey
+      this.wallet.publicKey,
     );
     const vaultTokenAccount = await getAssociatedTokenAddress(
       this.tokenMint,
       factoryPda,
-      true
+      true,
     );
 
     const tx = await this.factoryProgram.methods
@@ -704,9 +704,8 @@ export class AintiVirusSolana {
   async getCurrentStakeSeason(): Promise<bigint> {
     const [stakingPda] = this.getStakingPda();
     try {
-      const stakingAccount = await this.stakingProgram.account.staking.fetch(
-        stakingPda
-      );
+      const stakingAccount =
+        await this.stakingProgram.account.staking.fetch(stakingPda);
       return BigInt(stakingAccount.currentStakeSeason.toString());
     } catch {
       // If staking account doesn't exist, return 0
@@ -732,13 +731,12 @@ export class AintiVirusSolana {
 
     const tokenAccount = await getAssociatedTokenAddress(
       this.tokenMint,
-      address
+      address,
     );
 
     try {
-      const accountInfo = await this.connection.getTokenAccountBalance(
-        tokenAccount
-      );
+      const accountInfo =
+        await this.connection.getTokenAccountBalance(tokenAccount);
       return BigInt(accountInfo.value.amount);
     } catch {
       return 0n;
@@ -752,7 +750,7 @@ export class AintiVirusSolana {
    */
   async initializeFactory(
     feeRate: bigint,
-    tokenMint: PublicKey
+    tokenMint: PublicKey,
   ): Promise<TransactionResult> {
     const [factoryPda] = this.getFactoryPda();
 
@@ -760,7 +758,7 @@ export class AintiVirusSolana {
     const vaultTokenAccount = await getAssociatedTokenAddress(
       tokenMint,
       factoryPda,
-      true
+      true,
     );
 
     const tx = await this.factoryProgram.methods
@@ -785,7 +783,7 @@ export class AintiVirusSolana {
    */
   async deployMixer(
     mode: AssetMode,
-    amount: bigint
+    amount: bigint,
   ): Promise<TransactionResult> {
     const [mixerPoolPda] = this.getMixerPoolPda(mode, amount);
     const [mixerConfigPda] = this.getMixerConfigPda(mode, amount);
@@ -884,15 +882,14 @@ export class AintiVirusSolana {
     const [factoryPda] = this.getFactoryPda();
     let factoryAccount: any;
     try {
-      factoryAccount = await this.factoryProgram.account.factory.fetch(
-        factoryPda
-      );
+      factoryAccount =
+        await this.factoryProgram.account.factory.fetch(factoryPda);
     } catch (error: any) {
       const errorMsg = error?.message || String(error);
       if (errorMsg.includes("array")) {
         throw new Error(
           `Failed to deserialize factory account. This may indicate an IDL type mismatch. ` +
-            `Original error: ${errorMsg}`
+            `Original error: ${errorMsg}`,
         );
       }
       throw error;
@@ -911,9 +908,8 @@ export class AintiVirusSolana {
   async getFeeRate(): Promise<bigint> {
     const [factoryPda] = this.getFactoryPda();
     try {
-      const factoryAccount = await this.factoryProgram.account.factory.fetch(
-        factoryPda
-      );
+      const factoryAccount =
+        await this.factoryProgram.account.factory.fetch(factoryPda);
       return factoryAccount?.feeRate
         ? BigInt(factoryAccount.feeRate.toString())
         : 0n;
@@ -922,7 +918,7 @@ export class AintiVirusSolana {
       if (errorMsg.includes("array")) {
         throw new Error(
           `Failed to deserialize factory account. This may indicate an IDL type mismatch. ` +
-            `Original error: ${errorMsg}`
+            `Original error: ${errorMsg}`,
         );
       }
       throw error;
@@ -945,36 +941,35 @@ export class AintiVirusSolana {
     const [seasonPda] = this.getStakeSeasonPda(seasonId);
 
     try {
-      const seasonAccount = await this.stakingProgram.account.stakeSeason.fetch(
-        seasonPda
-      );
+      const seasonAccount =
+        await this.stakingProgram.account.stakeSeason.fetch(seasonPda);
       return {
         seasonId: BigInt(seasonAccount.seasonId?.toString() || "0"),
         startTimestamp: BigInt(seasonAccount.startTimestamp?.toString() || "0"),
         endTimestamp: BigInt(seasonAccount.endTimestamp?.toString() || "0"),
         totalStakedSolAmount: BigInt(
-          seasonAccount.totalStakedSolAmount?.toString() || "0"
+          seasonAccount.totalStakedSolAmount?.toString() || "0",
         ),
         totalStakedTokenAmount: BigInt(
-          seasonAccount.totalStakedTokenAmount?.toString() || "0"
+          seasonAccount.totalStakedTokenAmount?.toString() || "0",
         ),
         totalRewardSolAmount: BigInt(
-          seasonAccount.totalRewardSolAmount?.toString() || "0"
+          seasonAccount.totalRewardSolAmount?.toString() || "0",
         ),
         totalRewardTokenAmount: BigInt(
-          seasonAccount.totalRewardTokenAmount?.toString() || "0"
+          seasonAccount.totalRewardTokenAmount?.toString() || "0",
         ),
         totalSolWeightValue: BigInt(
-          seasonAccount.totalSolWeightValue?.toString() || "0"
+          seasonAccount.totalSolWeightValue?.toString() || "0",
         ),
         totalTokenWeightValue: BigInt(
-          seasonAccount.totalTokenWeightValue?.toString() || "0"
+          seasonAccount.totalTokenWeightValue?.toString() || "0",
         ),
       };
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `Stake season ${seasonId} not found. Original error: ${errorMsg}`
+        `Stake season ${seasonId} not found. Original error: ${errorMsg}`,
       );
     }
   }
@@ -986,35 +981,34 @@ export class AintiVirusSolana {
     const stakerPubkey = new PublicKey(address);
     const stakerRecordPda = PublicKey.findProgramAddressSync(
       [Buffer.from("staker_record"), stakerPubkey.toBuffer()],
-      this.stakingProgram.programId
+      this.stakingProgram.programId,
     )[0];
 
     try {
-      const stakerRecord = await this.stakingProgram.account.stakerRecord.fetch(
-        stakerRecordPda
-      );
+      const stakerRecord =
+        await this.stakingProgram.account.stakerRecord.fetch(stakerRecordPda);
       return {
         solStakedSeasonId: BigInt(
-          stakerRecord.solStakedSeasonId?.toString() || "0"
+          stakerRecord.solStakedSeasonId?.toString() || "0",
         ),
         tokenStakedSeasonId: BigInt(
-          stakerRecord.tokenStakedSeasonId?.toString() || "0"
+          stakerRecord.tokenStakedSeasonId?.toString() || "0",
         ),
         solStakedTimestamp: BigInt(
-          stakerRecord.solStakedTimestamp?.toString() || "0"
+          stakerRecord.solStakedTimestamp?.toString() || "0",
         ),
         tokenStakedTimestamp: BigInt(
-          stakerRecord.tokenStakedTimestamp?.toString() || "0"
+          stakerRecord.tokenStakedTimestamp?.toString() || "0",
         ),
         stakedSolAmount: BigInt(
-          stakerRecord.stakedSolAmount?.toString() || "0"
+          stakerRecord.stakedSolAmount?.toString() || "0",
         ),
         stakedTokenAmount: BigInt(
-          stakerRecord.stakedTokenAmount?.toString() || "0"
+          stakerRecord.stakedTokenAmount?.toString() || "0",
         ),
         solWeightValue: BigInt(stakerRecord.solWeightValue?.toString() || "0"),
         tokenWeightValue: BigInt(
-          stakerRecord.tokenWeightValue?.toString() || "0"
+          stakerRecord.tokenWeightValue?.toString() || "0",
         ),
       };
     } catch {
@@ -1041,9 +1035,8 @@ export class AintiVirusSolana {
    */
   async getStakingAddress(): Promise<PublicKey> {
     const [factoryPda] = this.getFactoryPda();
-    const factoryAccount = await this.factoryProgram.account.factory.fetch(
-      factoryPda
-    );
+    const factoryAccount =
+      await this.factoryProgram.account.factory.fetch(factoryPda);
     return factoryAccount.stakingProgram as PublicKey;
   }
 }

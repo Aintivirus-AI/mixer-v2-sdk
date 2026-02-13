@@ -88,7 +88,7 @@ const signer = await provider.getSigner();
 const sdk = new AintiVirusEVM(
   "0x...", // Factory contract address
   "0x...", // Token contract address
-  signer
+  signer,
 );
 
 // Deposit ETH
@@ -134,7 +134,7 @@ const sdk = new AintiVirusSolana(
   "AinTiV1ru5Staking1111111111111111111111111111", // Staking program ID
   wallet,
   connection,
-  "TokenMintAddress..." // Optional: Token mint address
+  "TokenMintAddress...", // Optional: Token mint address
 );
 
 // Deposit SOL

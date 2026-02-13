@@ -4,7 +4,6 @@ export const QUERIES = {
       protocol(id: $id) {
         id
         feeRate
-        relayerFeeRate
         factoryAddress
         stakingAddress
         nextSeasonDuration
@@ -27,7 +26,6 @@ export const QUERIES = {
       protocols(first: 1, orderBy: updatedBlockTimestamp, orderDirection: desc) {
         id
         feeRate
-        relayerFeeRate
         factoryAddress
         stakingAddress
         nextSeasonDuration
@@ -61,7 +59,7 @@ export const QUERIES = {
         orderDirection: $orderDirection
       ) {
         id
-        mode
+        asset
         amount
         address
         deployedBlockNumber
@@ -79,7 +77,7 @@ export const QUERIES = {
     query GetMixerPool($id: ID!) {
       mixerPool(id: $id) {
         id
-        mode
+        asset
         amount
         address
         deployedBlockNumber
@@ -144,33 +142,6 @@ export const QUERIES = {
     }
   `,
 
-  withdrawalsRelayed: `
-    query GetWithdrawalsRelayed(
-      $first: Int!,
-      $skip: Int!,
-      $where: WithdrawalRelayed_filter,
-      $orderDirection: OrderDirection!
-    ) {
-      withdrawalRelayeds(
-        first: $first,
-        skip: $skip,
-        where: $where,
-        orderBy: blockTimestamp,
-        orderDirection: $orderDirection
-      ) {
-        id
-        pool { id }
-        recipient
-        relayer
-        relayerFee
-        nullifierHash
-        blockNumber
-        blockTimestamp
-        transactionHash
-      }
-    }
-  `,
-
   season: `
     query GetSeason($id: ID!) {
       season(id: $id) {
@@ -179,9 +150,9 @@ export const QUERIES = {
         start
         end
         duration
-        modes {
+        assets {
           id
-          mode
+          asset
           duration
           totalStaked
           totalReward
@@ -191,14 +162,14 @@ export const QUERIES = {
     }
   `,
 
-  seasonModes: `
-    query GetSeasonModes(
+  seasonAssets: `
+    query GetSeasonAssets(
       $first: Int!,
       $skip: Int!,
-      $where: SeasonMode_filter,
+      $where: SeasonAsset_filter,
       $orderDirection: OrderDirection!
     ) {
-      seasonModes(
+      seasonAssets(
         first: $first,
         skip: $skip,
         where: $where,
@@ -206,7 +177,7 @@ export const QUERIES = {
         orderDirection: $orderDirection
       ) {
         id
-        mode
+        asset
         duration
         totalStaked
         totalReward
@@ -231,7 +202,7 @@ export const QUERIES = {
       ) {
         id
         staker
-        seasonMode { id }
+        seasonAsset { id }
         amount
         blockNumber
         blockTimestamp
@@ -256,7 +227,7 @@ export const QUERIES = {
       ) {
         id
         staker
-        seasonMode { id }
+        seasonAsset { id }
         amount
         blockNumber
         blockTimestamp
@@ -281,7 +252,7 @@ export const QUERIES = {
       ) {
         id
         staker
-        seasonMode { id }
+        seasonAsset { id }
         amount
         blockNumber
         blockTimestamp
@@ -290,4 +261,3 @@ export const QUERIES = {
     }
   `,
 } as const;
-
