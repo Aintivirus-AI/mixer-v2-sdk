@@ -2,90 +2,110 @@
 pragma solidity ^0.8.28;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
- * @title AintivirusPayment
- * @dev Payment contract that tracks on-chain payments with allowed tokens or ETH
+ * @title AintiVirusPayment
+ * @dev Payment contract that tracks on-chain payments with allowed tokens
  */
-contract AintivirusPayment is ReentrancyGuard, AccessControl, Pausable {
-    // Errors (inlined to avoid external errors import)
-    error InvalidAmount();
-    error InvalidToken();
-    error OrderAlreadyPaid();
-    error TokenTransferFailed();
-    error ETHTransferFailed();
-    error InvalidAddress();
-    error ETHAlwaysAllowed();
-    error CannotRemoveETH();
-    error TokenNotInAllowList();
-    error TokenAlreadyAllowed();
-
-    // Constants
-    address public constant ETH_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-
-    // State variables
-    address public treasuryWallet;
-    uint256 public totalVolume;
-    uint256 public paymentCount;
-
-    // Token allow list: token address => is allowed
-    mapping(address => bool) public allowedTokens;
-
-    // Payment records: orderId => PaymentRecord
-    mapping(bytes32 => PaymentRecord) public payments;
-
-    // User payment history
-    mapping(address => bytes32[]) public userPayments;
+contract AintiVirusPayment is ReentrancyGuard, AccessControl, Pausable {
+    using SafeERC20 for IERC20;
 
     struct PaymentRecord {
         bytes32 orderId;
         address buyer;
-        address paymentToken; // Token address used for payment (ETH_ADDRESS for ETH)
+        address token;
         uint256 amount;
         uint256 paidAt;
-        bool isPaid;
     }
 
-    // Events
+    address public treasury;
+
+    mapping(address token => bool) public allowedTokens;
+    mapping(bytes32 orderId => PaymentRecord) public payments;
+    mapping(address user => bytes32[] orderIds) public paymentsOf;
+
     event PaymentProcessed(
         bytes32 indexed orderId,
         address indexed buyer,
-        address indexed paymentToken,
+        address indexed token,
         uint256 amount,
         uint256 timestamp
     );
-
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
+    event TokenUpdated(address indexed token, bool allowed);
 
-    event TokenAdded(address indexed token);
-    event TokenRemoved(address indexed token);
+    error InvalidAmount();
+    error InvalidToken();
+    error OrderAlreadyPaid();
+    error InvalidAddress();
 
-    constructor(address _treasuryWallet) {
-        if (_treasuryWallet == address(0)) revert InvalidAddress();
-        treasuryWallet = _treasuryWallet;
+    constructor(address _treasury) {
+        if (_treasury == address(0)) revert InvalidAddress();
+        treasury = _treasury;
 
-        // ETH is always allowed
-        allowedTokens[ETH_ADDRESS] = true;
-
-        // Grant DEFAULT_ADMIN_ROLE to deployer
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
-    // Modifiers
-    modifier validAddress(address _addr) {
-        if (_addr == address(0)) revert InvalidAddress();
-        _;
+    function payWithRecipient(
+        bytes32 _orderId,
+        address _token,
+        address _buyer,
+        uint256 _amount
+    ) external whenNotPaused nonReentrant {
+        if (_buyer == address(0)) revert InvalidAddress();
+        if (!allowedTokens[_token]) revert InvalidToken();
+        if (_amount == 0) revert InvalidAmount();
+        if (payments[_orderId].paidAt != 0) revert OrderAlreadyPaid();
+
+        IERC20(_token).safeTransferFrom(msg.sender, treasury, _amount);
+
+        payments[_orderId] = PaymentRecord({
+            orderId: _orderId,
+            buyer: _buyer,
+            token: _token,
+            amount: _amount,
+            paidAt: block.timestamp
+        });
+
+        paymentsOf[_buyer].push(_orderId);
+
+        emit PaymentProcessed(_orderId, _buyer, _token, _amount, block.timestamp);
     }
 
-    function updateTreasury(
-        address _newTreasury
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) validAddress(_newTreasury) {
-        address oldTreasury = treasuryWallet;
-        treasuryWallet = _newTreasury;
-        emit TreasuryUpdated(oldTreasury, _newTreasury);
+    function getPayment(bytes32 _orderId) external view returns (PaymentRecord memory) {
+        return payments[_orderId];
+    }
+
+    function paymentDetailsOf(
+        address _user
+    ) external view returns (PaymentRecord[] memory records) {
+        bytes32[] memory paymentIds = paymentsOf[_user];
+        uint256 _len = paymentIds.length;
+
+        records = new PaymentRecord[](_len);
+
+        for (uint256 i; i < _len; i++) {
+            records[i] = payments[paymentIds[i]];
+        }
+    }
+
+    function updateTreasury(address _newTreasury) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_newTreasury == address(0)) revert InvalidAddress();
+        emit TreasuryUpdated(treasury, _newTreasury);
+        treasury = _newTreasury;
+    }
+
+    function updateAllowedToken(
+        address _token,
+        bool _allowed
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_token == address(0)) revert InvalidAddress();
+        emit TokenUpdated(_token, _allowed);
+        allowedTokens[_token] = _allowed;
     }
 
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -95,148 +115,4 @@ contract AintivirusPayment is ReentrancyGuard, AccessControl, Pausable {
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
     }
-
-    /**
-     * @dev Add a token to the allow list
-     * @param _token The token address to add
-     */
-    function addAllowedToken(
-        address _token
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) validAddress(_token) {
-        if (_token == ETH_ADDRESS) revert ETHAlwaysAllowed();
-        if (allowedTokens[_token]) revert TokenAlreadyAllowed();
-        allowedTokens[_token] = true;
-        emit TokenAdded(_token);
-    }
-
-    /**
-     * @dev Remove a token from the allow list
-     * @param _token The token address to remove
-     */
-    function removeAllowedToken(address _token) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_token == ETH_ADDRESS) revert CannotRemoveETH();
-        if (!allowedTokens[_token]) revert TokenNotInAllowList();
-        allowedTokens[_token] = false;
-        emit TokenRemoved(_token);
-    }
-
-    /**
-     * @dev Check if a token is allowed for payments
-     * @param _token The token address to check
-     * @return True if token is allowed
-     */
-    function isTokenAllowed(address _token) external view returns (bool) {
-        return allowedTokens[_token];
-    }
-
-    /**
-     * @dev Internal function to record payment and update statistics
-     * @param _orderId The unique order ID
-     * @param _buyer The buyer/recipient address
-     * @param _token The payment token address
-     * @param _amount The payment amount
-     */
-    function _recordPayment(
-        bytes32 _orderId,
-        address _buyer,
-        address _token,
-        uint256 _amount
-    ) internal {
-        uint256 timestamp = block.timestamp;
-
-        // Record payment on-chain
-        payments[_orderId] = PaymentRecord({
-            orderId: _orderId,
-            buyer: _buyer,
-            paymentToken: _token,
-            amount: _amount,
-            paidAt: timestamp,
-            isPaid: true
-        });
-
-        // Add to user payment history
-        userPayments[_buyer].push(_orderId);
-
-        // Update statistics (safe to use unchecked)
-        unchecked {
-            totalVolume += _amount;
-            paymentCount++;
-        }
-
-        emit PaymentProcessed(_orderId, _buyer, _token, _amount, timestamp);
-    }
-
-    /**
-     * @dev Process payment with recipient address using ERC20 token or ETH
-     * @param _orderId The unique order ID generated off-chain
-     * @param _token The token address to use for payment (ETH_ADDRESS for ETH)
-     * @param _recipient The recipient address (ETH or SOL address)
-     * @param _amount The payment amount in tokens
-     */
-    function payWithRecipient(
-        bytes32 _orderId,
-        address _token,
-        address _recipient,
-        uint256 _amount
-    ) external payable whenNotPaused nonReentrant validAddress(_recipient) {
-        if (_amount == 0) revert InvalidAmount();
-        if (payments[_orderId].isPaid) revert OrderAlreadyPaid();
-
-        if (_token == ETH_ADDRESS) {
-            if (msg.value != _amount) revert InvalidAmount();
-            address treasury = treasuryWallet; // Cache storage read
-            (bool success, ) = payable(treasury).call{value: _amount}("");
-            if (!success) revert ETHTransferFailed();
-        } else {
-            if (!allowedTokens[_token]) revert InvalidToken();
-            if (!IERC20(_token).transferFrom(msg.sender, treasuryWallet, _amount)) {
-                revert TokenTransferFailed();
-            }
-        }
-
-        _recordPayment(_orderId, _recipient, _token, _amount);
-    }
-
-    // View functions
-    function getPayment(bytes32 _orderId) external view returns (PaymentRecord memory) {
-        return payments[_orderId];
-    }
-
-    function isOrderPaid(bytes32 _orderId) external view returns (bool) {
-        return payments[_orderId].isPaid;
-    }
-
-    function getPaymentAmount(bytes32 _orderId) external view returns (uint256) {
-        return payments[_orderId].amount;
-    }
-
-    function getPaymentToken(bytes32 _orderId) external view returns (address) {
-        return payments[_orderId].paymentToken;
-    }
-
-    function getUserPayments(address _user) external view returns (bytes32[] memory) {
-        return userPayments[_user];
-    }
-
-    function getUserPaymentDetails(address _user) external view returns (PaymentRecord[] memory) {
-        bytes32[] memory paymentIds = userPayments[_user];
-        PaymentRecord[] memory userPaymentRecords = new PaymentRecord[](paymentIds.length);
-
-        for (uint256 i = 0; i < paymentIds.length; i++) {
-            userPaymentRecords[i] = payments[paymentIds[i]];
-        }
-
-        return userPaymentRecords;
-    }
-
-    function getStatistics()
-        external
-        view
-        returns (uint256 _totalVolume, uint256 _paymentCount, address _treasury)
-    {
-        return (totalVolume, paymentCount, treasuryWallet);
-    }
-
-    // Receive ETH
-    receive() external payable {}
 }

@@ -16,13 +16,14 @@ export enum AssetMode {
 }
 
 /**
- * Withdrawal proof structure
+ * Withdrawal proof structure.
+ * pubSignals: [nullifierHash, recipient, root, fee, relayer]
  */
 export interface WithdrawalProof {
   pA: [bigint, bigint];
   pB: [[bigint, bigint], [bigint, bigint]];
   pC: [bigint, bigint];
-  pubSignals: [bigint, bigint, bigint];
+  pubSignals: [bigint, bigint, bigint, bigint, bigint];
 }
 
 /**
@@ -112,8 +113,14 @@ export type StakerRecord = SolanaStakerRecord | EVMStakerRecord;
 export interface EvmChainConfig {
   factoryAddress: string;
   tokenAddress?: string;
+  /** WETH contract address (for identifying ETH pools; used with wethGatewayAddress) */
+  wethAddress?: string;
+  /** WETHGateway contract; required for native ETH deposits/stakes (Factory is ERC20-only) */
+  wethGatewayAddress?: string;
   rpcUrl?: string;
   subgraphUrl?: string;
+  /** Payment contract address (for subgraph payment stats / payment processed list) */
+  paymentAddress?: string;
 }
 
 /**
@@ -148,6 +155,8 @@ export interface SDKConfig {
   evm?: {
     factoryAddress: string;
     tokenAddress?: string;
+    wethAddress?: string;
+    wethGatewayAddress?: string;
     rpcUrl?: string;
     provider?: unknown;
   };

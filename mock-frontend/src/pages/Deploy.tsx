@@ -1,10 +1,5 @@
 import { useState } from "react";
-import {
-  useDeploy,
-  useMixerConfig,
-  useMixer,
-  ETH_ADDRESS,
-} from "@aintivirus-ai/mixer-sdk";
+import { useDeploy, useMixerConfig, useMixer } from "@aintivirus-ai/mixer-sdk";
 import { parseEther, parseUnits } from "ethers";
 import { useChainId, useAccount } from "wagmi";
 
@@ -26,6 +21,8 @@ export default function Deploy() {
   const { getEvmChainConfig, evmChainIds } = useMixerConfig();
   const evmChainConfig =
     chainId != null ? getEvmChainConfig(chainId) : undefined;
+  const wethAddress = (evmChainConfig as { wethAddress?: string } | undefined)
+    ?.wethAddress;
 
   const mixer = useMixer();
   const { deployMixer, isReady: isReadyFromHook } = useDeploy();
@@ -47,6 +44,12 @@ export default function Deploy() {
       alert("Token address must be a valid 0x… address");
       return;
     }
+    if (assetKind === "ETH" && !wethAddress) {
+      alert(
+        "WETH address not configured. Set VITE_WETH_ADDRESS in .env for ETH pools.",
+      );
+      return;
+    }
     if (!isReady) {
       alert("Please connect your wallet on a supported chain (from config).");
       return;
@@ -55,7 +58,7 @@ export default function Deploy() {
     setTxHash(null);
     setMixerAddress(null);
     try {
-      const assetAddress = assetKind === "ETH" ? ETH_ADDRESS : tokenAddress;
+      const assetAddress = assetKind === "ETH" ? wethAddress! : tokenAddress;
       let amountBigInt: bigint;
       if (assetKind === "ETH") {
         amountBigInt = parseEther(amount);
@@ -184,7 +187,8 @@ export default function Deploy() {
             Fixed amount per deposit (
             {assetKind === "ETH"
               ? "ETH"
-              : "human amount; decimals read from token contract"})
+              : "human amount; decimals read from token contract"}
+            )
           </label>
           <input
             type="number"

@@ -7,7 +7,10 @@ import {
   type MixerPool,
   type MixerPoolOrderBy,
   type OrderDirection,
+  type PaymentProcessedEntity,
+  type PaymentStats,
   type ProtocolState,
+  type TokenUpdatedEntity,
   type SeasonAssetEntity,
   type SeasonEntity,
   type StakedEntity,
@@ -72,6 +75,8 @@ export class AintiVirusEVMSubgraph {
       relayerFeeRate: 0n,
       factoryAddress: p.factoryAddress ?? null,
       stakingAddress: p.stakingAddress ?? null,
+      feeCollector: p.feeCollector ?? null,
+      rewardPoolShareBps: p.rewardPoolShareBps != null ? asBigint(p.rewardPoolShareBps) : null,
       nextSeasonDuration: asBigint(p.nextSeasonDuration),
       currentSeasonId: asBigint(p.currentSeasonId),
       totalDeposited: asBigint(p.totalDeposited),
@@ -101,6 +106,8 @@ export class AintiVirusEVMSubgraph {
       relayerFeeRate: 0n,
       factoryAddress: p.factoryAddress ?? null,
       stakingAddress: p.stakingAddress ?? null,
+      feeCollector: p.feeCollector ?? null,
+      rewardPoolShareBps: p.rewardPoolShareBps != null ? asBigint(p.rewardPoolShareBps) : null,
       nextSeasonDuration: asBigint(p.nextSeasonDuration),
       currentSeasonId: asBigint(p.currentSeasonId),
       totalDeposited: asBigint(p.totalDeposited),
@@ -236,6 +243,9 @@ export class AintiVirusEVMSubgraph {
       id: d.id,
       pool: { id: d.pool?.id },
       commitment: d.commitment,
+      protocolFee: d.protocolFee != null ? asBigint(d.protocolFee) : undefined,
+      extraFee: d.extraFee != null ? asBigint(d.extraFee) : undefined,
+      partnerAddress: d.partnerAddress ?? undefined,
       blockNumber: asBigint(d.blockNumber),
       blockTimestamp: asBigint(d.blockTimestamp),
       transactionHash: d.transactionHash,
@@ -447,6 +457,95 @@ export class AintiVirusEVMSubgraph {
       blockNumber: asBigint(e.blockNumber),
       blockTimestamp: asBigint(e.blockTimestamp),
       transactionHash: e.transactionHash,
+    }));
+  }
+
+  /**
+   * Get payment stats by payment contract address (id = contract address hex).
+   */
+  async getPaymentStats(paymentContractAddress: string): Promise<PaymentStats | null> {
+    const id = paymentContractAddress.toLowerCase().startsWith("0x")
+      ? paymentContractAddress.toLowerCase()
+      : paymentContractAddress;
+    const data = await this.request<{ paymentStats: any | null }>(QUERIES.paymentStats, { id });
+    const s = data.paymentStats;
+    if (!s) return null;
+    return {
+      id: s.id,
+      contractAddress: typeof s.contractAddress === "string" ? s.contractAddress : String(s.contractAddress),
+      treasuryWallet: typeof s.treasuryWallet === "string" ? s.treasuryWallet : String(s.treasuryWallet),
+      totalVolume: asBigint(s.totalVolume),
+      paymentCount: asBigint(s.paymentCount),
+      updatedBlockNumber: asBigint(s.updatedBlockNumber),
+      updatedBlockTimestamp: asBigint(s.updatedBlockTimestamp),
+      updatedTransactionHash: typeof s.updatedTransactionHash === "string" ? s.updatedTransactionHash : String(s.updatedTransactionHash),
+    };
+  }
+
+  /**
+   * Get recent PaymentProcessed events. Optionally filter by buyer (user address).
+   */
+  async getPaymentProcessedList(params?: {
+    buyer?: string;
+    first?: number;
+    skip?: number;
+    orderBy?: "blockTimestamp" | "blockNumber";
+    orderDirection?: OrderDirection;
+  }): Promise<PaymentProcessedEntity[]> {
+    const {
+      buyer,
+      first = 50,
+      skip = 0,
+      orderBy = "blockTimestamp",
+      orderDirection = "desc",
+    } = params ?? {};
+    const where: Record<string, string> = {};
+    if (buyer) where.buyer = buyer.toLowerCase();
+    const data = await this.request<{ paymentProcesseds: any[] }>(
+      QUERIES.paymentProcessedList,
+      { first, skip, where, orderBy, orderDirection }
+    );
+    return (data.paymentProcesseds ?? []).map((e) => ({
+      id: e.id,
+      orderId: typeof e.orderId === "string" ? e.orderId : String(e.orderId),
+      buyer: typeof e.buyer === "string" ? e.buyer : String(e.buyer),
+      token: typeof e.token === "string" ? e.token : String(e.token),
+      amount: asBigint(e.amount),
+      timestamp: asBigint(e.timestamp),
+      blockNumber: asBigint(e.blockNumber),
+      blockTimestamp: asBigint(e.blockTimestamp),
+      transactionHash: typeof e.transactionHash === "string" ? e.transactionHash : String(e.transactionHash),
+      isNativeETH: !!e.isNativeETH,
+    }));
+  }
+
+  /**
+   * Get TokenUpdated events (oldest first so latest per token wins when reducing to current state).
+   * Use orderDirection: "asc" and take last event per token to get currently allowed list.
+   */
+  async getTokenUpdatedList(params?: {
+    first?: number;
+    skip?: number;
+    orderBy?: "blockTimestamp" | "blockNumber";
+    orderDirection?: OrderDirection;
+  }): Promise<TokenUpdatedEntity[]> {
+    const {
+      first = 500,
+      skip = 0,
+      orderBy = "blockTimestamp",
+      orderDirection = "asc",
+    } = params ?? {};
+    const data = await this.request<{ tokenUpdateds: any[] }>(
+      QUERIES.tokenUpdatedList,
+      { first, skip, where: {}, orderBy, orderDirection }
+    );
+    return (data.tokenUpdateds ?? []).map((e) => ({
+      id: e.id,
+      token: typeof e.token === "string" ? e.token : String(e.token),
+      allowed: !!e.allowed,
+      blockNumber: asBigint(e.blockNumber),
+      blockTimestamp: asBigint(e.blockTimestamp),
+      transactionHash: typeof e.transactionHash === "string" ? e.transactionHash : String(e.transactionHash),
     }));
   }
 }

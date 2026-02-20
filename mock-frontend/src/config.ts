@@ -6,6 +6,10 @@ export const FACTORY_ADDRESS =
 
 export const TOKEN_ADDRESS = import.meta.env.VITE_TOKEN_ADDRESS;
 
+/** WETH and WETHGateway (for native ETH deposits/stakes; Factory is ERC20-only) */
+export const WETH_ADDRESS = import.meta.env.VITE_WETH_ADDRESS;
+export const WETH_GATEWAY_ADDRESS = import.meta.env.VITE_WETH_GATEWAY_ADDRESS;
+
 /** Single-chain EVM config for use with useDeploy(config) when not using MixerProvider. */
 export const evmConfig = {
   factoryAddress: FACTORY_ADDRESS,
@@ -21,11 +25,15 @@ export const mixerSdkConfig = {
       [sepolia.id]: {
         factoryAddress: FACTORY_ADDRESS,
         ...(TOKEN_ADDRESS ? { tokenAddress: TOKEN_ADDRESS } : {}),
+        ...(WETH_ADDRESS ? { wethAddress: WETH_ADDRESS } : {}),
+        ...(WETH_GATEWAY_ADDRESS ? { wethGatewayAddress: WETH_GATEWAY_ADDRESS } : {}),
         ...(SUBGRAPH_URL ? { subgraphUrl: SUBGRAPH_URL } : {}),
       },
       [mainnet.id]: {
         factoryAddress: import.meta.env.VITE_MAINNET_FACTORY_ADDRESS ?? FACTORY_ADDRESS,
         ...(TOKEN_ADDRESS ? { tokenAddress: TOKEN_ADDRESS } : {}),
+        ...(WETH_ADDRESS ? { wethAddress: WETH_ADDRESS } : {}),
+        ...(WETH_GATEWAY_ADDRESS ? { wethGatewayAddress: WETH_GATEWAY_ADDRESS } : {}),
         ...(import.meta.env.VITE_MAINNET_SUBGRAPH_URL
           ? { subgraphUrl: import.meta.env.VITE_MAINNET_SUBGRAPH_URL }
           : {}),
@@ -33,4 +41,4 @@ export const mixerSdkConfig = {
     },
     solana: {},
   },
-} as const;
+};

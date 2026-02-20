@@ -38,7 +38,14 @@ export * from "./utils/proof";
 
 // Re-export commonly used types
 export { AssetMode } from "./types";
-export type { DepositData, WithdrawalProof, TransactionResult, MixerSDKConfig, EvmChainConfig, SolanaChainConfig } from "./types";
+export type {
+  DepositData,
+  WithdrawalProof,
+  TransactionResult,
+  MixerSDKConfig,
+  EvmChainConfig,
+  SolanaChainConfig,
+} from "./types";
 export type { SDKConfig } from "./types";
 
 // React integration – provider and useDeploy (use "@aintivirus-ai/mixer-sdk" only)
@@ -49,12 +56,20 @@ export {
   useMixer,
   useDeploy,
   useDeposit,
+  useWithdraw,
+  useAdmin,
+  usePayment,
 } from "./hooks";
 export type {
   MixerContextValue,
   UseDeployReturn,
   UseDepositReturn,
   DepositResult,
+  UseWithdrawReturn,
+  WithdrawParams,
+  UseAdminReturn,
+  UsePaymentReturn,
+  PaymentRecord,
 } from "./hooks";
 
 /**
@@ -72,13 +87,18 @@ export class AintiVirusSDK {
           (config.evm.rpcUrl ? new JsonRpcProvider(config.evm.rpcUrl) : null);
         if (!provider) throw new Error("EVM provider or rpcUrl required");
         const signer =
-          provider && typeof (provider as { signTransaction?: unknown }).signTransaction === "function"
+          provider &&
+          typeof (provider as { signTransaction?: unknown }).signTransaction ===
+            "function"
             ? (provider as unknown as import("ethers").Signer)
             : null;
         this.evm = new AintiVirusEVM(
           config.evm.factoryAddress,
-          config.evm.tokenAddress ?? "0x0000000000000000000000000000000000000000",
-          signer ?? (provider as import("ethers").Provider)
+          config.evm.tokenAddress ??
+            "0x0000000000000000000000000000000000000000",
+          signer ?? (provider as import("ethers").Provider),
+          config.evm.wethGatewayAddress,
+          config.evm.wethAddress,
         );
       } catch (err) {
         throw new Error(`Failed to initialize EVM SDK: ${err}`);
@@ -87,7 +107,7 @@ export class AintiVirusSDK {
     if (config.solana) {
       // Solana integration disabled in hooks; legacy SDK does not support Solana
       throw new Error(
-        "Solana in AintiVirusSDK requires connection and wallet; use createMixerSDK().getSolana(network, wallet, connection) or hooks (when Solana re-enabled)."
+        "Solana in AintiVirusSDK requires connection and wallet; use createMixerSDK().getSolana(network, wallet, connection) or hooks (when Solana re-enabled).",
       );
     }
   }

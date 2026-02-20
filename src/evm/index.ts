@@ -1,4 +1,4 @@
-import { Contract, Signer, Provider } from "ethers";
+import { Contract, Signer, Provider, type InterfaceAbi } from "ethers";
 import {
   AssetMode,
   WithdrawalProof,
@@ -8,12 +8,36 @@ import {
 } from "../types";
 import { bigIntToBytes32 } from "../utils/crypto";
 
+import factoryAbi from "./abis/AintiVirusFactory.json";
+import stakingAbi from "./abis/AintiVirusStaking.json";
+import paymentAbi from "./abis/AintiVirusPayment.json";
+import wethGatewayAbi from "./abis/WETHGateway.json";
+
+type AbiArtifact = { abi: unknown };
+const FACTORY_ABI = (factoryAbi as AbiArtifact).abi as InterfaceAbi;
+const STAKING_ABI = (stakingAbi as AbiArtifact).abi as InterfaceAbi;
+const PAYMENT_ABI = (paymentAbi as AbiArtifact).abi as InterfaceAbi;
+const WETH_GATEWAY_ABI = (wethGatewayAbi as AbiArtifact).abi as InterfaceAbi;
+
+/** Minimal ERC20 ABI for allowance/approve/balanceOf/decimals (not in contract artifacts). */
+const ERC20_ABI = [
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function balanceOf(address account) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+];
+
 /** Normalize contract return value to bigint (handles ethers Result / { data } from viem-backed provider). */
 function toBigint(value: unknown): bigint {
   if (typeof value === "bigint") return value;
   if (typeof value === "number") return BigInt(value);
   if (typeof value === "string") return BigInt(value);
-  if (value != null && typeof value === "object" && "data" in value && typeof (value as { data: unknown }).data === "string") {
+  if (
+    value != null &&
+    typeof value === "object" &&
+    "data" in value &&
+    typeof (value as { data: unknown }).data === "string"
+  ) {
     return BigInt((value as { data: string }).data);
   }
   throw new Error(`Expected bigint-like value, got: ${typeof value}`);
@@ -30,51 +54,15 @@ export class AintiVirusEVM {
   private token: Contract;
   private signer: Signer;
   private provider: Provider;
-
-  // Factory ABI – matches AintiVirusFactory.sol (asset-based: address _asset, uint256 _amount)
-  private static readonly FACTORY_ABI = [
-    "function deployMixer(address _asset, uint256 _amount) returns (address)",
-    "function mixers(address _asset, uint256 _amount) view returns (address)",
-    "function deposit(address _asset, uint256 _amount, bytes32 _commitment) payable",
-    "function withdraw(tuple(uint256[2] pA, uint256[2][2] pB, uint256[2] pC, uint256[3] pubSignals) _proof, uint256 _fee, uint256 _amount, address _asset)",
-    "function calculateDepositAmount(uint256 _amount) view returns (uint256)",
-    "function feeRate() view returns (uint256)",
-    "function staking() view returns (address)",
-    "function stake(address _asset, uint256 amount) payable",
-    "function claim(address _asset, uint256 seasonId) returns (uint256)",
-    "function unstake(address _asset) returns (uint256)",
-    "function updateNextSeasonDuration(uint256 _duration)",
-    "function startNewSeason()",
-    "function currentStakeSeasonId() view returns (uint256)",
-    "function setFeeRate(uint256 _feeRate)",
-    "event MixerDeployed(address indexed mixer, address indexed asset, uint256 indexed amount)",
-    "event Deposit(address indexed asset, uint256 amount, uint256 fee, bytes32 indexed commitment)",
-    "event Withdrawal(address indexed asset, uint256 amount, address to, bytes32 nullifierHash)",
-    "event FeeRateUpdated(uint256 oldFeeRate, uint256 newFeeRate)",
-  ];
-
-  // ERC20 ABI
-  private static readonly ERC20_ABI = [
-    "function approve(address spender, uint256 amount) returns (bool)",
-    "function allowance(address owner, address spender) view returns (uint256)",
-    "function balanceOf(address account) view returns (uint256)",
-    "function decimals() view returns (uint8)",
-  ];
-
-  // Staking ABI – matches IAintiVirusStaking (asset-based)
-  private static readonly STAKING_ABI = [
-    "function seasonAndTotals(uint256 seasonId_, address asset_) view returns (uint256 seasonId, uint256 start, uint256 end, uint256 duration, uint256 totalStaked, uint256 totalReward, uint256 totalWeight)",
-    "function seasons(uint256 seasonId_) view returns (uint256 seasonId, uint256 start, uint256 end, uint256 duration)",
-    "function records(address staker_, address asset_) view returns (uint64 seasonId, uint64 stakedAt, uint128 claimedCount, uint256 staked, uint256 weight)",
-    "function wasSeasonClaimed(address staker, uint256 seasonId, address asset) view returns (bool)",
-    "function nextSeasonDuration() view returns (uint256)",
-    "function currentSeasonId() view returns (uint256)",
-  ];
+  private wethGateway: Contract | null = null;
+  private wethAddress: string | null = null;
 
   constructor(
     factoryAddress: string,
     tokenAddress: string,
     signerOrProvider: Signer | Provider,
+    wethGatewayAddress?: string | null,
+    wethAddress?: string | null,
   ) {
     // Treat as Signer if it has a non-null provider (ethers v6 or viem adapter)
     const isSigner =
@@ -88,14 +76,25 @@ export class AintiVirusEVM {
 
     this.factory = new Contract(
       factoryAddress,
-      AintiVirusEVM.FACTORY_ABI,
+      FACTORY_ABI,
       signerOrProvider,
     );
     this.token = new Contract(
       tokenAddress,
-      AintiVirusEVM.ERC20_ABI,
+      ERC20_ABI,
       signerOrProvider,
     );
+
+    if (wethGatewayAddress) {
+      this.wethGateway = new Contract(
+        wethGatewayAddress,
+        WETH_GATEWAY_ABI,
+        signerOrProvider,
+      );
+    }
+    if (wethAddress) {
+      this.wethAddress = wethAddress;
+    }
   }
 
   /**
@@ -113,6 +112,34 @@ export class AintiVirusEVM {
   }
 
   /**
+   * Get WETH address (config or from factory.weth()).
+   */
+  async getWethAddress(): Promise<string | null> {
+    if (this.wethAddress) {
+      return this.wethAddress;
+    }
+    try {
+      const w = await this.factory.weth();
+      const out = w && typeof w === "string" ? w : (w?.toString?.() ?? null);
+      return out;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Check if an address is the WETH asset (for "ETH" pools).
+   * Treats both the actual WETH contract and the canonical ETH placeholder (ETH_ADDRESS) as WETH.
+   */
+  async isWethAsset(assetAddress: string): Promise<boolean> {
+    const weth = await this.getWethAddress();
+    if (!weth) return false;
+    const a = assetAddress.toLowerCase();
+    const w = weth.toLowerCase();
+    return a === w || a === ETH_ADDRESS.toLowerCase();
+  }
+
+  /**
    * Get the provider instance
    */
   getProvider(): Provider {
@@ -120,18 +147,26 @@ export class AintiVirusEVM {
   }
 
   /**
-   * Calculate total deposit amount including fees
+   * Calculate total deposit amount including protocol fee and partner fee.
+   * @param amount Base deposit amount
+   * @param partnerAddress Partner address for extra fee; use zero address for no partner
    */
-  async calculateDepositAmount(amount: bigint): Promise<bigint> {
-    const result = await this.factory.calculateDepositAmount(amount);
+  async calculateDepositAmount(
+    amount: bigint,
+    partnerAddress: string = "0x0000000000000000000000000000000000000000",
+  ): Promise<bigint> {
+    const result = await this.factory.calculateDepositAmount(
+      amount,
+      partnerAddress,
+    );
     return toBigint(result);
   }
 
   /**
-   * Get fee rate
+   * Get fee rate in basis points (contract: feeBps)
    */
   async getFeeRate(): Promise<bigint> {
-    return await this.factory.feeRate();
+    return toBigint(await this.factory.feeBps());
   }
 
   /**
@@ -145,7 +180,7 @@ export class AintiVirusEVM {
     const asset =
       typeof assetOrMode === "number"
         ? assetOrMode === AssetMode.ETH
-          ? ETH_ADDRESS
+          ? (this.wethAddress ?? (this.token.target as string))
           : (this.token.target as string)
         : assetOrMode.toLowerCase().startsWith("0x")
           ? assetOrMode
@@ -165,68 +200,88 @@ export class AintiVirusEVM {
   }
 
   /**
-   * Deposit ETH into the mixer
+   * Deposit into the mixer. For WETH pools with WETHGateway configured, uses native ETH.
+   * Otherwise uses ERC20 (approve + Factory.deposit).
+   * @param assetAddress ERC20 asset (WETH or token). When WETH + gateway, user pays native ETH.
+   * @param amount Deposit amount
+   * @param commitment Commitment hash
+   * @param partnerAddress Partner for white-label extra fee; use zero address for none
    */
-  async depositEth(
+  async deposit(
+    assetAddress: string,
     amount: bigint,
     commitment: bigint,
+    partnerAddress: string = "0x0000000000000000000000000000000000000000",
   ): Promise<TransactionResult> {
     if (!this.signer) {
       throw new Error("Signer required for transactions");
     }
 
-    const totalAmountRaw = await this.calculateDepositAmount(amount);
-    const totalAmount = toBigint(totalAmountRaw);
-    const tx = await this.factory.deposit(
-      ETH_ADDRESS,
+    const totalAmount = await this.calculateDepositAmount(
       amount,
-      bigIntToBytes32(toBigint(commitment)),
-      { value: totalAmount },
+      partnerAddress,
     );
-    const txHash = typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
 
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
-  }
-
-  /**
-   * Deposit tokens into the mixer
-   */
-  async depositToken(
-    amount: bigint,
-    commitment: bigint,
-  ): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
+    const gateway = this.wethGateway;
+    const isWeth = gateway && (await this.isWethAsset(assetAddress));
+    if (isWeth && gateway) {
+      // Use explicit overload: deposit(uint256,bytes32) or deposit(uint256,bytes32,address)
+      const commitmentBytes32 = bigIntToBytes32(toBigint(commitment));
+      const tx =
+        partnerAddress === "0x0000000000000000000000000000000000000000"
+          ? await gateway.getFunction("deposit(uint256,bytes32)")(
+              amount,
+              commitmentBytes32,
+              { value: totalAmount },
+            )
+          : await gateway.getFunction(
+              "deposit(uint256,bytes32,address)",
+            )(amount, commitmentBytes32, partnerAddress, {
+              value: totalAmount,
+            });
+      const txHash =
+        typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+      if (!txHash) throw new Error("Transaction hash missing");
+      const receipt = await this.waitForTransactionReceipt(txHash);
+      return {
+        txHash: receipt.hash ?? txHash,
+        blockNumber: receipt.blockNumber,
+        blockTime: (await this.provider.getBlock(receipt.blockNumber))
+          ?.timestamp,
+      };
     }
 
-    const totalAmountRaw = await this.calculateDepositAmount(amount);
-    const totalAmount = toBigint(totalAmountRaw);
     const factoryAddress = await this.factory.getAddress();
+    const assetContract =
+      assetAddress.toLowerCase() === (this.token.target as string).toLowerCase()
+        ? this.token
+        : new Contract(assetAddress, ERC20_ABI, this.signer);
 
-    // Check and approve if needed
-    const allowanceRaw = await this.token.allowance(
+    const allowanceRaw = await assetContract.allowance(
       await this.signer.getAddress(),
       factoryAddress,
     );
     const allowance = toBigint(allowanceRaw);
     if (allowance < totalAmount) {
-      const approveTx = await this.token.approve(factoryAddress, totalAmount);
-      const approveHash = typeof approveTx.hash === "string" ? approveTx.hash : (approveTx as { hash?: string }).hash;
+      const approveTx = await assetContract.approve(
+        factoryAddress,
+        totalAmount,
+      );
+      const approveHash =
+        typeof approveTx.hash === "string"
+          ? approveTx.hash
+          : (approveTx as { hash?: string }).hash;
       if (approveHash) await this.waitForTransactionReceipt(approveHash);
     }
 
     const tx = await this.factory.deposit(
-      this.token.target as string,
+      assetAddress,
       amount,
       bigIntToBytes32(toBigint(commitment)),
+      partnerAddress,
     );
-    const txHash = typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
     if (!txHash) throw new Error("Transaction hash missing");
     const receipt = await this.waitForTransactionReceipt(txHash);
 
@@ -238,69 +293,97 @@ export class AintiVirusEVM {
   }
 
   /**
-   * Withdraw from the mixer
+   * Deposit native ETH via WETHGateway. Requires wethAddress + wethGatewayAddress in config.
+   * @deprecated Use deposit(wethAddress, amount, commitment) instead.
+   */
+  async depositEth(
+    amount: bigint,
+    commitment: bigint,
+  ): Promise<TransactionResult> {
+    if (!this.wethAddress) {
+      throw new Error(
+        "WETH address not configured; use deposit(wethAddress, amount, commitment)",
+      );
+    }
+    return this.deposit(this.wethAddress, amount, commitment);
+  }
+
+  /**
+   * @deprecated Use deposit(assetAddress, amount, commitment) instead.
+   */
+  async depositToken(
+    amount: bigint,
+    commitment: bigint,
+  ): Promise<TransactionResult> {
+    return this.deposit(this.token.target as string, amount, commitment);
+  }
+
+  /**
+   * Withdraw from the mixer.
+   * @param proof Withdrawal proof (fee must be proof.pubSignals[3] when using relayer).
+   * @param fee Relayer fee; must equal proof.pubSignals[3] (use 0n for no relayer).
+   * @param amount Withdrawal amount (pool fixed amount).
+   * @param assetAddress Pool asset address.
    */
   async withdraw(
     proof: WithdrawalProof,
+    fee: bigint,
     amount: bigint,
-    mode: AssetMode,
+    assetAddress: string,
   ): Promise<TransactionResult> {
     if (!this.signer) {
       throw new Error("Signer required for transactions");
     }
 
-    // Format proof for contract
-    const formattedProof = {
-      pA: [proof.pA[0].toString(), proof.pA[1].toString()],
-      pB: [
-        [proof.pB[0][0].toString(), proof.pB[0][1].toString()],
-        [proof.pB[1][0].toString(), proof.pB[1][1].toString()],
-      ],
-      pC: [proof.pC[0].toString(), proof.pC[1].toString()],
-      pubSignals: proof.pubSignals.map((s) => s.toString()),
-    };
-
-    const asset =
-      mode === AssetMode.ETH ? ETH_ADDRESS : (this.token.target as string);
-    const tx = await this.factory.withdraw(formattedProof, 0n, amount, asset);
-    const receipt = await tx.wait();
+    const tx = await this.factory.getFunction(
+      "withdraw(tuple(uint256[2] pA, uint256[2][2] pB, uint256[2] pC, uint256[5] pubSignals),uint256,uint256,address)",
+    )(proof, fee, amount, assetAddress);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
 
     return {
-      txHash: receipt.hash,
+      txHash: receipt.hash ?? txHash,
       blockNumber: receipt.blockNumber,
       blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
     };
   }
 
   /**
-   * Withdraw via relayer (same as withdraw with fee 0).
+   * Withdraw via relayer (fee from proof).
    */
   async withdrawRelayed(
     proof: WithdrawalProof,
     amount: bigint,
-    mode: AssetMode,
+    assetAddress: string,
   ): Promise<TransactionResult> {
-    return this.withdraw(proof, amount, mode);
+    const fee = BigInt(proof.pubSignals[3]);
+    return this.withdraw(proof, fee, amount, assetAddress);
   }
 
   /**
-   * Stake ETH
+   * Stake native ETH via WETHGateway. Requires wethGatewayAddress in config.
+   * Falls back to stakeToken (config token) if no gateway.
    */
   async stakeEther(amount: bigint): Promise<TransactionResult> {
     if (!this.signer) {
       throw new Error("Signer required for transactions");
     }
-
-    const tx = await this.factory.stake(ETH_ADDRESS, amount, {
-      value: amount,
-    });
-    const receipt = await tx.wait();
-
-    return {
-      txHash: receipt.hash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    if (this.wethGateway) {
+      const tx = await this.wethGateway.stake({ value: amount });
+      const txHash =
+        typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+      if (!txHash) throw new Error("Transaction hash missing");
+      const receipt = await this.waitForTransactionReceipt(txHash);
+      return {
+        txHash: receipt.hash ?? txHash,
+        blockNumber: receipt.blockNumber,
+        blockTime: (await this.provider.getBlock(receipt.blockNumber))
+          ?.timestamp,
+      };
+    }
+    return this.stakeToken(amount);
   }
 
   /**
@@ -318,32 +401,45 @@ export class AintiVirusEVM {
     );
     if (allowance < amount) {
       const approveTx = await this.token.approve(factoryAddress, amount);
-      await approveTx.wait();
+      const approveHash =
+        typeof approveTx.hash === "string"
+          ? approveTx.hash
+          : (approveTx as { hash?: string }).hash;
+      if (approveHash) await this.waitForTransactionReceipt(approveHash);
     }
 
     const tx = await this.factory.stake(this.token.target as string, amount);
-    const receipt = await tx.wait();
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
 
     return {
-      txHash: receipt.hash,
+      txHash: receipt.hash ?? txHash,
       blockNumber: receipt.blockNumber,
       blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
     };
   }
 
   /**
-   * Claim ETH rewards
+   * Claim ETH rewards (WETH asset)
    */
   async claimEth(seasonId: bigint): Promise<TransactionResult> {
     if (!this.signer) {
       throw new Error("Signer required for transactions");
     }
+    const weth = await this.getWethAddress();
+    if (!weth)
+      throw new Error("WETH address not available (config or factory.weth())");
 
-    const tx = await this.factory.claim(ETH_ADDRESS, seasonId);
-    const receipt = await tx.wait();
+    const tx = await this.factory.claim(weth, seasonId);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
 
     return {
-      txHash: receipt.hash,
+      txHash: receipt.hash ?? txHash,
       blockNumber: receipt.blockNumber,
       blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
     };
@@ -358,28 +454,37 @@ export class AintiVirusEVM {
     }
 
     const tx = await this.factory.claim(this.token.target as string, seasonId);
-    const receipt = await tx.wait();
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
 
     return {
-      txHash: receipt.hash,
+      txHash: receipt.hash ?? txHash,
       blockNumber: receipt.blockNumber,
       blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
     };
   }
 
   /**
-   * Unstake ETH
+   * Unstake ETH (WETH asset)
    */
   async unstakeEth(): Promise<TransactionResult> {
     if (!this.signer) {
       throw new Error("Signer required for transactions");
     }
+    const weth = await this.getWethAddress();
+    if (!weth)
+      throw new Error("WETH address not available (config or factory.weth())");
 
-    const tx = await this.factory.unstake(ETH_ADDRESS);
-    const receipt = await tx.wait();
+    const tx = await this.factory.unstake(weth);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
 
     return {
-      txHash: receipt.hash,
+      txHash: receipt.hash ?? txHash,
       blockNumber: receipt.blockNumber,
       blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
     };
@@ -394,10 +499,13 @@ export class AintiVirusEVM {
     }
 
     const tx = await this.factory.unstake(this.token.target as string);
-    const receipt = await tx.wait();
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
 
     return {
-      txHash: receipt.hash,
+      txHash: receipt.hash ?? txHash,
       blockNumber: receipt.blockNumber,
       blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
     };
@@ -426,13 +534,515 @@ export class AintiVirusEVM {
     }
 
     const tx = await this.factory.startNewSeason();
-    const receipt = await tx.wait();
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
 
     return {
-      txHash: receipt.hash,
+      txHash: receipt.hash ?? txHash,
       blockNumber: receipt.blockNumber,
       blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
     };
+  }
+
+  /**
+   * Set fee rate (admin only; requires OPERATOR_ROLE)
+   * @param feeRate Fee rate in basis points (e.g., 250 for 0.25%)
+   */
+  async setFeeRate(feeRate: bigint): Promise<TransactionResult> {
+    if (!this.signer) {
+      throw new Error("Signer required for transactions");
+    }
+
+    const tx = await this.factory.setFeeRate(feeRate);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Set staking season period for the next season (admin only; requires OPERATOR_ROLE)
+   * @param duration Duration in seconds (e.g., 86400 for 1 day)
+   */
+  async updateNextSeasonDuration(duration: bigint): Promise<TransactionResult> {
+    if (!this.signer) {
+      throw new Error("Signer required for transactions");
+    }
+
+    const tx = await this.factory.updateNextSeasonDuration(duration);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Set fee collector that receives the fee collector share of deposit fees (requires DEFAULT_ADMIN_ROLE)
+   */
+  async setFeeCollector(feeCollector: string): Promise<TransactionResult> {
+    if (!this.signer) {
+      throw new Error("Signer required for transactions");
+    }
+
+    const tx = await this.factory.setFeeCollector(feeCollector);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Set share of deposit fees that go to the reward pool; rest goes to admin wallet (requires OPERATOR_ROLE)
+   * @param bps Share in basis points (e.g., 5000 = 50%), max 10000
+   */
+  async setRewardPoolShareBps(bps: bigint): Promise<TransactionResult> {
+    if (!this.signer) {
+      throw new Error("Signer required for transactions");
+    }
+
+    const tx = await this.factory.setRewardPoolShareBps(bps);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Add a partner and set their extra fee (requires OPERATOR_ROLE)
+   */
+  async addPartner(
+    partner: string,
+    extraFee: bigint,
+  ): Promise<TransactionResult> {
+    if (!this.signer) {
+      throw new Error("Signer required for transactions");
+    }
+
+    const tx = await this.factory.addPartner(partner, extraFee);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Update a registered partner's extra fee (requires OPERATOR_ROLE)
+   */
+  async setPartnerExtraFee(
+    partner: string,
+    extraFee: bigint,
+  ): Promise<TransactionResult> {
+    if (!this.signer) {
+      throw new Error("Signer required for transactions");
+    }
+
+    const tx = await this.factory.setPartnerExtraFee(partner, extraFee);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Allow a registered partner to set their own extra fee (caller must be a registered partner)
+   */
+  async setMyExtraFee(extraFee: bigint): Promise<TransactionResult> {
+    if (!this.signer) {
+      throw new Error("Signer required for transactions");
+    }
+
+    const tx = await this.factory.setMyExtraFee(extraFee);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Remove a partner (requires OPERATOR_ROLE)
+   */
+  async removePartner(partner: string): Promise<TransactionResult> {
+    if (!this.signer) {
+      throw new Error("Signer required for transactions");
+    }
+
+    const tx = await this.factory.removePartner(partner);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Get fee collector address
+   */
+  async getFeeCollector(): Promise<string> {
+    return await this.factory.feeCollector();
+  }
+
+  /**
+   * Get reward pool share in basis points (contract: rewardsShareBps)
+   */
+  async getRewardPoolShareBps(): Promise<bigint> {
+    return toBigint(await this.factory.rewardsShareBps());
+  }
+
+  /**
+   * Get payment contract address (for gift card withdrawals).
+   */
+  async getPaymentAddress(): Promise<string> {
+    return await this.factory.payment();
+  }
+
+  /** Lazy-loaded payment contract (from factory.payment()). Returns null if not set. */
+  private async getPaymentContract(): Promise<Contract | null> {
+    const addr = await this.getPaymentAddress();
+    if (!addr || addr === "0x0000000000000000000000000000000000000000")
+      return null;
+    return new Contract(addr, PAYMENT_ABI, this.signer ?? this.provider);
+  }
+
+  /**
+   * Process payment with recipient (buyer) via the payment contract (ERC20).
+   * Use for any allowed token including WETH (caller must hold WETH and approve the payment contract).
+   * For native ETH, use payWithRecipientViaGateway instead.
+   * @param orderId bytes32 (0x-prefixed 64-char hex)
+   * @param token ERC20 token address (e.g. WETH or other allowed token)
+   * @param buyer recipient/buyer address
+   * @param amount token amount in token's smallest unit
+   */
+  async payWithRecipient(
+    orderId: string,
+    token: string,
+    buyer: string,
+    amount: bigint,
+  ): Promise<TransactionResult> {
+    if (!this.signer) throw new Error("Signer required for transactions");
+    const paymentAddr = await this.getPaymentAddress();
+    if (!paymentAddr || paymentAddr === "0x0000000000000000000000000000000000000000") {
+      throw new Error("Payment contract not set on factory");
+    }
+    const payment = await this.getPaymentContract();
+    if (!payment) throw new Error("Payment contract not set on factory");
+    try {
+      const signerAddr = await (this.signer as { getAddress?: () => Promise<string> }).getAddress?.();
+      const tokenContractWithSigner = new Contract(token, ERC20_ABI, this.signer);
+      if (signerAddr) {
+        const allowanceRaw = await tokenContractWithSigner.allowance(signerAddr, paymentAddr).catch(() => null);
+        const allowance = allowanceRaw != null ? toBigint(allowanceRaw) : null;
+        if (allowance != null && amount > allowance) {
+          const approveTx = await tokenContractWithSigner.approve(paymentAddr, amount);
+          const approveHash = typeof approveTx.hash === "string" ? approveTx.hash : (approveTx as { hash?: string }).hash;
+          if (approveHash) await this.waitForTransactionReceipt(approveHash);
+        }
+      }
+      const tx = await payment.payWithRecipient(orderId, token, buyer, amount);
+      const txHash =
+        typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+      if (!txHash) throw new Error("Transaction hash missing");
+      const receipt = await this.waitForTransactionReceipt(txHash);
+      return {
+        txHash: receipt.hash ?? txHash,
+        blockNumber: receipt.blockNumber,
+        blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+      };
+    } catch (err: unknown) {
+      throw err;
+    }
+  }
+
+  /**
+   * Pay with native ETH via WETHGateway (wrap ETH → approve payment → payWithRecipient with WETH).
+   * Use this when the user pays in ETH; amount is in wei (msg.value).
+   */
+  async payWithRecipientViaGateway(
+    orderId: string,
+    buyer: string,
+    amountWei: bigint,
+  ): Promise<TransactionResult> {
+    if (!this.signer) throw new Error("Signer required for transactions");
+    if (!this.wethGateway) throw new Error("WETH Gateway not configured for this chain");
+    if (amountWei <= 0n) throw new Error("Amount must be positive");
+    const wethAddr = await this.getWethAddress();
+    if (!wethAddr) throw new Error("WETH address not configured for gateway payment");
+    const tx = await this.wethGateway.payWithRecipient(orderId, wethAddr, buyer, {
+      value: amountWei,
+    });
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Get a single payment record by order ID. Returns zeroed record if not found.
+   */
+  async getPayment(orderId: string): Promise<{
+    orderId: string;
+    buyer: string;
+    token: string;
+    amount: bigint;
+    paidAt: bigint;
+  }> {
+    const payment = await this.getPaymentContract();
+    if (!payment) {
+      return {
+        orderId: "0x" + "0".repeat(64),
+        buyer: "0x0000000000000000000000000000000000000000",
+        token: "0x0000000000000000000000000000000000000000",
+        amount: 0n,
+        paidAt: 0n,
+      };
+    }
+    const r = await payment.getPayment(orderId);
+    return {
+      orderId: typeof r.orderId === "string" ? r.orderId : "0x" + BigInt(r.orderId).toString(16).padStart(64, "0"),
+      buyer: typeof r.buyer === "string" ? r.buyer : String(r.buyer),
+      token: typeof r.token === "string" ? r.token : String(r.token),
+      amount: toBigint(r.amount),
+      paidAt: toBigint(r.paidAt),
+    };
+  }
+
+  /**
+   * Get all payment records for a user (buyer).
+   */
+  async getPaymentDetailsOf(user: string): Promise<
+    Array<{
+      orderId: string;
+      buyer: string;
+      token: string;
+      amount: bigint;
+      paidAt: bigint;
+    }>
+  > {
+    const payment = await this.getPaymentContract();
+    if (!payment) return [];
+    const records = await payment.paymentDetailsOf(user);
+    return (records ?? []).map((r: any) => ({
+      orderId: typeof r.orderId === "string" ? r.orderId : "0x" + BigInt(r.orderId).toString(16).padStart(64, "0"),
+      buyer: typeof r.buyer === "string" ? r.buyer : String(r.buyer),
+      token: typeof r.token === "string" ? r.token : String(r.token),
+      amount: toBigint(r.amount),
+      paidAt: toBigint(r.paidAt),
+    }));
+  }
+
+  /**
+   * Check if a token is allowed for payments.
+   */
+  async isAllowedToken(token: string): Promise<boolean> {
+    const payment = await this.getPaymentContract();
+    if (!payment) return false;
+    return await payment.allowedTokens(token);
+  }
+
+  /**
+   * Get payment contract treasury address.
+   */
+  async getPaymentTreasury(): Promise<string> {
+    const payment = await this.getPaymentContract();
+    if (!payment) return "0x0000000000000000000000000000000000000000";
+    return await payment.treasury();
+  }
+
+  /**
+   * Add or remove a token from the allowed list (DEFAULT_ADMIN_ROLE on payment contract).
+   */
+  async updateAllowedToken(token: string, allowed: boolean): Promise<TransactionResult> {
+    if (!this.signer) throw new Error("Signer required for transactions");
+    const payment = await this.getPaymentContract();
+    if (!payment) throw new Error("Payment contract not set on factory");
+    const tx = await payment.updateAllowedToken(token, allowed);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Check if gift card withdrawals are enabled for a mixer (by mixer contract address).
+   */
+  async isGiftCardWithdrawEnabled(mixerAddress: string): Promise<boolean> {
+    return await this.factory.giftCardWithdrawEnabled(mixerAddress);
+  }
+
+  /**
+   * Set payment contract (OPERATOR_ROLE).
+   */
+  async setPayment(paymentAddress: string): Promise<TransactionResult> {
+    if (!this.signer) throw new Error("Signer required for transactions");
+    const tx = await this.factory.setPayment(paymentAddress);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Enable or disable gift card withdrawals for a mixer (OPERATOR_ROLE).
+   */
+  async setMixerGiftCardEnabled(
+    asset: string,
+    amount: bigint,
+    enabled: boolean,
+  ): Promise<TransactionResult> {
+    if (!this.signer) throw new Error("Signer required for transactions");
+    const tx = await this.factory.setMixerGiftCardEnabled(
+      asset,
+      amount,
+      enabled,
+    );
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Batch enable/disable gift card withdrawals (OPERATOR_ROLE).
+   */
+  async batchSetMixerGiftCardEnabled(
+    assets: string[],
+    amounts: bigint[],
+    enabled: boolean,
+  ): Promise<TransactionResult> {
+    if (!this.signer) throw new Error("Signer required for transactions");
+    if (assets.length !== amounts.length)
+      throw new Error("assets and amounts length mismatch");
+    const tx = await this.factory.batchSetMixerGiftCardEnabled(
+      assets,
+      amounts,
+      enabled,
+    );
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Withdraw by gift card: factory pays order via payment contract (recipient from proof).
+   * @param orderId bytes32 order ID (0x-prefixed 64-char hex string).
+   */
+  async withdrawByGiftCard(
+    proof: WithdrawalProof,
+    orderId: string,
+    amount: bigint,
+    assetAddress: string,
+  ): Promise<TransactionResult> {
+    if (!this.signer) throw new Error("Signer required for transactions");
+    const tx = await this.factory.getFunction(
+      "withdrawByGiftCard(tuple(uint256[2] pA, uint256[2][2] pB, uint256[2] pC, uint256[5] pubSignals),bytes32,uint256,address)",
+    )(proof, orderId, amount, assetAddress);
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) throw new Error("Transaction hash missing");
+    const receipt = await this.waitForTransactionReceipt(txHash);
+    return {
+      txHash: receipt.hash ?? txHash,
+      blockNumber: receipt.blockNumber,
+      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+    };
+  }
+
+  /**
+   * Check if an address is a registered partner
+   */
+  async isPartner(partner: string): Promise<boolean> {
+    return await this.factory.isPartner(partner);
+  }
+
+  /**
+   * Get partner extra fee in basis points
+   */
+  async getPartnersFee(partner: string): Promise<bigint> {
+    return toBigint(await this.factory.partnersFee(partner));
+  }
+
+  /** @deprecated Use isPartner */
+  async isWhiteLabelPartner(partner: string): Promise<boolean> {
+    return this.isPartner(partner);
+  }
+
+  /** @deprecated Use getPartnersFee */
+  async getPartnerExtraFee(partner: string): Promise<bigint> {
+    return this.getPartnersFee(partner);
   }
 
   /**
@@ -443,12 +1053,14 @@ export class AintiVirusEVM {
       const stakingAddress = await this.getStakingAddress();
       const staking = new Contract(
         stakingAddress,
-        AintiVirusEVM.STAKING_ABI,
+        STAKING_ABI,
         this.provider,
       );
+      const weth = await this.getWethAddress();
+      const ethAsset = weth ?? (this.token.target as string);
 
       const [ethTotals, tokenTotals] = await Promise.all([
-        staking.seasonAndTotals(seasonId, ETH_ADDRESS),
+        staking.seasonAndTotals(seasonId, ethAsset),
         staking.seasonAndTotals(seasonId, this.token.target as string),
       ]);
       return {
@@ -477,12 +1089,14 @@ export class AintiVirusEVM {
     const stakingAddress = await this.getStakingAddress();
     const staking = new Contract(
       stakingAddress,
-      AintiVirusEVM.STAKING_ABI,
+      STAKING_ABI,
       this.provider,
     );
+    const weth = await this.getWethAddress();
+    const ethAsset = weth ?? (this.token.target as string);
 
     const [ethRecord, tokenRecord] = await Promise.all([
-      staking.records(address, ETH_ADDRESS),
+      staking.records(address, ethAsset),
       staking.records(address, this.token.target as string),
     ]);
     return {
@@ -504,10 +1118,12 @@ export class AintiVirusEVM {
     const stakingAddress = await this.getStakingAddress();
     const staking = new Contract(
       stakingAddress,
-      AintiVirusEVM.STAKING_ABI,
+      STAKING_ABI,
       this.provider,
     );
-    return await staking.wasSeasonClaimed(address, seasonId, ETH_ADDRESS);
+    const weth = await this.getWethAddress();
+    const ethAsset = weth ?? (this.token.target as string);
+    return await staking.wasSeasonClaimed(address, seasonId, ethAsset);
   }
 
   /**
@@ -517,7 +1133,7 @@ export class AintiVirusEVM {
     const stakingAddress = await this.getStakingAddress();
     const staking = new Contract(
       stakingAddress,
-      AintiVirusEVM.STAKING_ABI,
+      STAKING_ABI,
       this.provider,
     );
     return await staking.wasSeasonClaimed(
@@ -551,10 +1167,10 @@ export class AintiVirusEVM {
     const addr = assetAddress.toLowerCase().startsWith("0x")
       ? assetAddress.toLowerCase()
       : assetAddress;
-    if (addr === ETH_ADDRESS.toLowerCase()) return 18;
+    if (this.wethAddress && addr === this.wethAddress.toLowerCase()) return 18;
     const tokenContract = new Contract(
       addr,
-      AintiVirusEVM.ERC20_ABI,
+      ERC20_ABI,
       this.provider,
     );
     const decimals = await tokenContract.decimals();
@@ -576,7 +1192,8 @@ export class AintiVirusEVM {
       ? assetAddress
       : assetAddress;
     const tx = await this.factory.deployMixer(asset, amount);
-    const txHash = typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
     if (!txHash) throw new Error("Transaction hash missing");
     const receipt = await this.waitForTransactionReceipt(txHash);
     const mixerAddress = this.parseMixerDeployedFromReceipt(receipt);
@@ -596,7 +1213,11 @@ export class AintiVirusEVM {
     hash: string,
     maxWaitMs = 90_000,
     pollIntervalMs = 2_000,
-  ): Promise<{ hash: string; blockNumber: number; logs: Array<{ topics: string[]; data: string }> }> {
+  ): Promise<{
+    hash: string;
+    blockNumber: number;
+    logs: Array<{ topics: string[]; data: string }>;
+  }> {
     const start = Date.now();
     for (;;) {
       try {
@@ -606,10 +1227,15 @@ export class AintiVirusEVM {
             typeof receipt.blockNumber === "bigint"
               ? Number(receipt.blockNumber)
               : (receipt.blockNumber as number);
-          const logs = (receipt.logs ?? []).map((log: { topics?: readonly string[] | string[]; data?: string }) => ({
-            topics: Array.isArray(log.topics) ? [...log.topics] : [],
-            data: typeof log.data === "string" ? log.data : "0x",
-          }));
+          const logs = (receipt.logs ?? []).map(
+            (log: {
+              topics?: readonly string[] | string[];
+              data?: string;
+            }) => ({
+              topics: Array.isArray(log.topics) ? [...log.topics] : [],
+              data: typeof log.data === "string" ? log.data : "0x",
+            }),
+          );
           return { hash, blockNumber, logs };
         }
       } catch {

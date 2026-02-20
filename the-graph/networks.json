@@ -1,0 +1,21 @@
+{
+  "sepolia": {
+    "AintiVirusFactory": {
+      "address": "0xfd93cA27038E8fFE6D329b9c91349F91BAb97A23",
+      "startBlock": 10090204
+    },
+    "AintiVirusStaking": {
+      "address": "0xE653d16d8dE82e3d508221B82289cEEDF2Fa1b59"
+    },
+    "AintiVirusPayment": {
+      "address": "0x9d309F151185b46AD4D6c68De24fc91ff080cb8A",
+      "startBlock": 10294871
+    },
+    "WETH": {
+      "address": "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9"
+    },
+    "WETHGateway": {
+      "address": "0x1791C9948176b590D59bcfFf39395EB833560A8F"
+    }
+  }
+}

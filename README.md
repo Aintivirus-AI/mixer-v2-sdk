@@ -224,11 +224,7 @@ import {
   AssetMode,
 } from "@aintivirus-ai/mixer-sdk/hooks";
 
-const { withdraw, isEVMReady } = useWithdraw({
-  evm: {
-    factoryAddress: "0x...",
-  },
-});
+const { withdraw, isEVMReady } = useWithdraw();
 
 // Withdraw
 await withdraw(ChainType.EVM, proof, amount, AssetMode.ETH);
@@ -495,17 +491,14 @@ const commitment = computeCommitment(secret, nullifier);
 
 ### Generating Withdrawal Proof
 
+Set `CIRCUIT_WASM` and `CIRCUIT_ZKEY` in your environment. Values may be HTTPS URLs (fetched at proof time) or base64-encoded file content.
+
 ```typescript
 import {
   generateWithdrawalProofFromData,
   buildMerkleTree,
   getMerklePath,
 } from "@aintivirus-ai/mixer-sdk";
-import { readFileSync } from "fs";
-
-// Load circuit files (from your build directory)
-const circuitWasm = readFileSync("path/to/mixer.wasm");
-const circuitZkey = readFileSync("path/to/mixer.zkey");
 
 // Get all commitments from deposit events
 const commitments = [
@@ -519,14 +512,12 @@ const root = BigInt(tree.root);
 // Get merkle path for your commitment
 const path = getMerklePath(tree, commitment);
 
-// Generate proof
+// Generate proof (circuit files loaded from env)
 const proof = await generateWithdrawalProofFromData({
   secret,
   nullifier,
   recipient: "0x...", // Recipient address
   commitments,
-  circuitWasm,
-  circuitZkey,
 });
 
 // Withdraw

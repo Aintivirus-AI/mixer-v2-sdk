@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {IAintiVirusStaking} from "./IAintiVirusStaking.sol";
+import {IAintiVirusPayment} from "./IAintiVirusPayment.sol";
 import {AintiVirusMixer} from "../AintiVirusMixer.sol";
 
 interface IAintiVirusFactory {
@@ -9,38 +10,38 @@ interface IAintiVirusFactory {
 
     function OPERATOR_ROLE() external view returns (bytes32);
 
-    function ETH_ADDRESS() external view returns (address);
+    function payment() external view returns (IAintiVirusPayment);
 
     function verifier() external view returns (address);
 
     function hasher() external view returns (address);
 
-    function feeRate() external view returns (uint256);
+    function feeBps() external view returns (uint256);
 
-    function adminWallet() external view returns (address);
+    function feeCollector() external view returns (address);
 
-    function rewardPoolShareBps() external view returns (uint256);
+    function rewardsShareBps() external view returns (uint256);
 
     function staking() external view returns (IAintiVirusStaking);
 
-    function mixers(address asset, uint256 amount) external view returns (address);
+    function mixers(address asset, uint256 amount) external view returns (AintiVirusMixer);
 
-    function isWhiteLabelPartner(address partner) external view returns (bool);
+    function isPartner(address partner) external view returns (bool);
 
-    function partnerExtraFee(address partner) external view returns (uint256);
+    function partnersFee(address partner) external view returns (uint256);
+
+    function giftCardWithdrawEnabled(address mixer) external view returns (bool);
 
     // ============ MIXER FUNCTIONS ============
 
-    function deployMixer(address _asset, uint256 _amount) external returns (address mixerAddress);
-
-    function deposit(address _asset, uint256 _amount, bytes32 _commitment) external payable;
+    function deployMixer(address _asset, uint256 _amount) external returns (AintiVirusMixer mixer);
 
     function deposit(
         address _asset,
         uint256 _amount,
         bytes32 _commitment,
         address _partnerAddress
-    ) external payable;
+    ) external;
 
     function withdraw(
         AintiVirusMixer.WithdrawalProof calldata _proof,
@@ -51,7 +52,9 @@ interface IAintiVirusFactory {
 
     // ============ STAKING FUNCTIONS ============
 
-    function stake(address _asset, uint256 amount) external payable;
+    function stake(address _asset, uint256 amount) external;
+
+    function stake(address _asset, uint256 amount, address _staker) external;
 
     function claim(address _asset, uint256 seasonId) external returns (uint256 reward);
 
@@ -65,27 +68,26 @@ interface IAintiVirusFactory {
 
     function claimUnclaimedRewards(address _asset, uint256 seasonId) external;
 
-    function setFeeRate(uint256 _feeRate) external;
+    function setFeeRate(uint256 _feeBps) external;
 
-    function setAdminWallet(address _adminWallet) external;
+    function setFeeCollector(address _feeCollector) external;
 
-    function setRewardPoolShareBps(uint256 _rewardPoolShareBps) external;
+    function setRewardPoolShareBps(uint256 _rewardsShareBps) external;
 
-    function addWhiteLabelPartner(address _partner, uint256 _extraFee) external;
+    function addPartner(address _partner, uint256 _extraFee) external;
 
     function setPartnerExtraFee(address _partner, uint256 _extraFee) external;
 
     function setMyExtraFee(uint256 _extraFee) external;
 
-    function removeWhiteLabelPartner(address _partner) external;
+    function removePartner(address _partner) external;
 
     // ============ VIEW FUNCTIONS ============
 
-    function calculateDepositAmount(uint256 _amount) external view returns (uint256);
-
-    function calculateTotalDepositAmount(uint256 _amount, address _partnerAddress) external view returns (uint256);
-
-    function isETH(address _asset) external pure returns (bool);
+    function calculateDepositAmount(
+        uint256 _amount,
+        address _partnerAddress
+    ) external view returns (uint256);
 
     function currentStakeSeasonId() external view returns (uint256);
 

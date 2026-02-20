@@ -41,6 +41,8 @@ export function normalizeConfig(config: SDKConfig | MixerSDKConfig): NormalizedM
       evmRecord[DEFAULT_EVM_CHAIN_ID] = {
         factoryAddress: legacy.evm.factoryAddress,
         tokenAddress: legacy.evm.tokenAddress,
+        wethAddress: legacy.evm.wethAddress,
+        wethGatewayAddress: legacy.evm.wethGatewayAddress,
         rpcUrl: legacy.evm.rpcUrl,
       };
     }

@@ -18,5 +18,5 @@ interface IAintiVirusPayment {
         address _token,
         address _recipient,
         uint256 _amount
-    ) external payable;
+    ) external;
 }

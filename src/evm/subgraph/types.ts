@@ -39,6 +39,8 @@ export interface ProtocolState {
   relayerFeeRate?: bigint;
   factoryAddress?: string | null;
   stakingAddress?: string | null;
+  feeCollector?: string | null;
+  rewardPoolShareBps?: bigint | null;
   nextSeasonDuration: bigint;
   currentSeasonId: bigint;
   totalDeposited: bigint;
@@ -70,6 +72,9 @@ export interface DepositEntity {
   id: string;
   pool: { id: string };
   commitment: string;
+  protocolFee?: bigint;
+  extraFee?: bigint;
+  partnerAddress?: string;
   blockNumber: bigint;
   blockTimestamp: bigint;
   transactionHash: string;
@@ -132,4 +137,37 @@ export interface SeasonEntity {
   end: bigint;
   duration: bigint;
   assets: SeasonAssetEntity[];
+}
+
+export interface PaymentStats {
+  id: string;
+  contractAddress: string;
+  treasuryWallet: string;
+  totalVolume: bigint;
+  paymentCount: bigint;
+  updatedBlockNumber: bigint;
+  updatedBlockTimestamp: bigint;
+  updatedTransactionHash: string;
+}
+
+export interface PaymentProcessedEntity {
+  id: string;
+  orderId: string;
+  buyer: string;
+  token: string;
+  amount: bigint;
+  timestamp: bigint;
+  blockNumber: bigint;
+  blockTimestamp: bigint;
+  transactionHash: string;
+  isNativeETH: boolean;
+}
+
+export interface TokenUpdatedEntity {
+  id: string;
+  token: string;
+  allowed: boolean;
+  blockNumber: bigint;
+  blockTimestamp: bigint;
+  transactionHash: string;
 }

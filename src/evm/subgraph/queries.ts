@@ -6,6 +6,8 @@ export const QUERIES = {
         feeRate
         factoryAddress
         stakingAddress
+        feeCollector
+        rewardPoolShareBps
         nextSeasonDuration
         currentSeasonId
         totalDeposited
@@ -28,6 +30,8 @@ export const QUERIES = {
         feeRate
         factoryAddress
         stakingAddress
+        feeCollector
+        rewardPoolShareBps
         nextSeasonDuration
         currentSeasonId
         totalDeposited
@@ -109,6 +113,9 @@ export const QUERIES = {
         id
         pool { id }
         commitment
+        protocolFee
+        extraFee
+        partnerAddress
         blockNumber
         blockTimestamp
         transactionHash
@@ -254,6 +261,75 @@ export const QUERIES = {
         staker
         seasonAsset { id }
         amount
+        blockNumber
+        blockTimestamp
+        transactionHash
+      }
+    }
+  `,
+
+  paymentStats: `
+    query GetPaymentStats($id: ID!) {
+      paymentStats(id: $id) {
+        id
+        contractAddress
+        treasuryWallet
+        totalVolume
+        paymentCount
+        updatedBlockNumber
+        updatedBlockTimestamp
+        updatedTransactionHash
+      }
+    }
+  `,
+
+  paymentProcessedList: `
+    query GetPaymentProcessedList(
+      $first: Int!,
+      $skip: Int!,
+      $where: PaymentProcessed_filter,
+      $orderBy: PaymentProcessed_orderBy!,
+      $orderDirection: OrderDirection!
+    ) {
+      paymentProcesseds(
+        first: $first,
+        skip: $skip,
+        where: $where,
+        orderBy: $orderBy,
+        orderDirection: $orderDirection
+      ) {
+        id
+        orderId
+        buyer
+        token
+        amount
+        timestamp
+        blockNumber
+        blockTimestamp
+        transactionHash
+        isNativeETH
+      }
+    }
+  `,
+
+  tokenUpdatedList: `
+    query GetTokenUpdatedList(
+      $first: Int!,
+      $skip: Int!,
+      $where: TokenUpdated_filter,
+      $orderBy: TokenUpdated_orderBy!,
+      $orderDirection: OrderDirection!
+    ) {
+      tokenUpdateds(
+        first: $first,
+        skip: $skip,
+        where: $where,
+        orderBy: $orderBy,
+        orderDirection: $orderDirection
+      ) {
+        id
+        token
+        allowed
         blockNumber
         blockTimestamp
         transactionHash

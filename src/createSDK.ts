@@ -56,7 +56,13 @@ export function createMixerSDK(config: MixerSDKConfig | SDKConfig): MixerSDKInst
       if (!chainConfig) return null;
       const tokenAddress = chainConfig.tokenAddress ?? "0x0000000000000000000000000000000000000000";
       try {
-        return new AintiVirusEVM(chainConfig.factoryAddress, tokenAddress, signerOrProvider);
+        return new AintiVirusEVM(
+          chainConfig.factoryAddress,
+          tokenAddress,
+          signerOrProvider,
+          chainConfig.wethGatewayAddress,
+          chainConfig.wethAddress,
+        );
       } catch {
         return null;
       }

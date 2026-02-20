@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import {
   useDeposit,
   useMixerConfig,
-  ETH_ADDRESS,
   AintiVirusEVMSubgraph,
 } from "@aintivirus-ai/mixer-sdk";
 import type { MixerPool, DepositData } from "@aintivirus-ai/mixer-sdk";
@@ -10,7 +9,10 @@ import { formatEther } from "ethers";
 
 /** Shape we need from useDeposit (SDK may export a different shape from dist) */
 interface DepositHook {
-  deposit: (assetAddress: string, amount: bigint) => Promise<{ txHash: string; depositData?: DepositData }>;
+  deposit: (
+    assetAddress: string,
+    amount: bigint,
+  ) => Promise<{ txHash: string; depositData?: DepositData }>;
   calculateDepositAmount?: (amount: bigint) => Promise<bigint>;
   isReady?: boolean;
 }
@@ -23,8 +25,8 @@ function formatAddress(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-function poolOptionLabel(pool: MixerPool): string {
-  const isEth = pool.asset.toLowerCase() === ETH_ADDRESS.toLowerCase();
+function poolOptionLabel(pool: MixerPool, wethAddress?: string): string {
+  const isEth = wethAddress ? pool.asset.toLowerCase() === wethAddress : false;
   const amountStr = isEth
     ? `${formatEther(pool.amount)} ETH`
     : `${pool.amount.toString()} (raw)`;
@@ -32,18 +34,18 @@ function poolOptionLabel(pool: MixerPool): string {
   return `${assetStr} – ${amountStr}`;
 }
 
-/** Serialize DepositData for JSON (bigint → string) */
-function depositDataToJson(d: DepositData): string {
+/** Serialize DepositData for JSON (bigint → string). Include asset so withdraw can find the pool from JSON. */
+function depositDataToJson(d: DepositData, asset: string): string {
   return JSON.stringify(
     {
       secret: d.secret.toString(),
       nullifier: d.nullifier.toString(),
       commitment: d.commitment.toString(),
       amount: d.amount.toString(),
-      mode: d.mode,
+      asset,
     },
     null,
-    2
+    2,
   );
 }
 
@@ -56,7 +58,9 @@ export default function Deposit() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [totalWithFee, setTotalWithFee] = useState<string | null>(null);
   /** Last deposit credentials – save this for withdrawal */
-  const [lastDepositData, setLastDepositData] = useState<DepositData | null>(null);
+  const [lastDepositData, setLastDepositData] = useState<DepositData | null>(
+    null,
+  );
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
   const chainId = useChainId();
@@ -64,6 +68,9 @@ export default function Deposit() {
   const { getEvmChainConfig, evmChainIds } = useMixerConfig();
   const evmChainConfig =
     chainId != null ? getEvmChainConfig(chainId) : undefined;
+  const wethAddress = (
+    evmChainConfig as { wethAddress?: string } | undefined
+  )?.wethAddress?.toLowerCase();
   const subgraphUrl = evmChainConfig?.subgraphUrl;
 
   const subgraph = useMemo(() => {
@@ -87,7 +94,11 @@ export default function Deposit() {
     setPoolsLoading(true);
     setPoolsError(null);
     subgraph
-      .getMixerPools({ first: 100, orderBy: "deployedBlockTimestamp", orderDirection: "desc" })
+      .getMixerPools({
+        first: 100,
+        orderBy: "deployedBlockTimestamp",
+        orderDirection: "desc",
+      })
       .then((data) => {
         if (!cancelled) {
           setPools(data ?? []);
@@ -95,7 +106,9 @@ export default function Deposit() {
       })
       .catch((e) => {
         if (!cancelled) {
-          setPoolsError(e instanceof Error ? e.message : "Failed to load mixers");
+          setPoolsError(
+            e instanceof Error ? e.message : "Failed to load mixers",
+          );
           setPools([]);
         }
       })
@@ -108,8 +121,11 @@ export default function Deposit() {
   }, [subgraph]);
 
   const selectedPool = useMemo(
-    () => (selectedPoolId ? pools.find((p) => p.id === selectedPoolId) ?? null : null),
-    [pools, selectedPoolId]
+    () =>
+      selectedPoolId
+        ? (pools.find((p) => p.id === selectedPoolId) ?? null)
+        : null,
+    [pools, selectedPoolId],
   );
 
   const handleDeposit = async () => {
@@ -128,9 +144,12 @@ export default function Deposit() {
     try {
       const result = await deposit(selectedPool.asset, selectedPool.amount);
       setTxHash(result.txHash);
-      const data = (result as { depositData?: DepositData }).depositData ?? null;
+      const data =
+        (result as { depositData?: DepositData }).depositData ?? null;
       setLastDepositData(data);
-      const isEth = selectedPool.asset.toLowerCase() === ETH_ADDRESS.toLowerCase();
+      const isEth = wethAddress
+        ? selectedPool.asset.toLowerCase() === wethAddress
+        : false;
       if (isEth && calculateDepositAmount) {
         const total = await calculateDepositAmount(selectedPool.amount);
         setTotalWithFee(formatEther(total));
@@ -140,7 +159,7 @@ export default function Deposit() {
     } catch (error: unknown) {
       console.error("Deposit error:", error);
       alert(
-        `Deposit failed: ${error instanceof Error ? error.message : "Unknown error"}`
+        `Deposit failed: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     } finally {
       setIsDepositing(false);
@@ -187,9 +206,9 @@ export default function Deposit() {
     <div>
       <h2 style={{ marginTop: 0 }}>Deposit</h2>
       <p style={{ fontSize: 14, color: "#666", marginBottom: 16 }}>
-        Select a deployed mixer from the list (from The Graph), then deposit.
-        A commitment is generated automatically; save the deposit data
-        (secret, nullifier) to withdraw later.
+        Select a deployed mixer from the list (from The Graph), then deposit. A
+        commitment is generated automatically; save the deposit data (secret,
+        nullifier) to withdraw later.
       </p>
       <div
         style={{
@@ -234,7 +253,7 @@ export default function Deposit() {
               <option value="">Select a mixer…</option>
               {pools.map((pool) => (
                 <option key={pool.id} value={pool.id}>
-                  {poolOptionLabel(pool)}
+                  {poolOptionLabel(pool, wethAddress)}
                 </option>
               ))}
             </select>
@@ -277,11 +296,20 @@ export default function Deposit() {
                 {txHash.slice(0, 10)}…{txHash.slice(-8)}
               </a>
             </p>
-            {totalWithFee != null && selectedPool && selectedPool.asset.toLowerCase() === ETH_ADDRESS.toLowerCase() && (
-              <p style={{ margin: "8px 0 0 0", fontSize: 12, color: "#64748b" }}>
-                Total paid (amount + fee): {totalWithFee} ETH
-              </p>
-            )}
+            {totalWithFee != null &&
+              selectedPool &&
+              wethAddress &&
+              selectedPool.asset.toLowerCase() === wethAddress && (
+                <p
+                  style={{
+                    margin: "8px 0 0 0",
+                    fontSize: 12,
+                    color: "#64748b",
+                  }}
+                >
+                  Total paid (amount + fee): {totalWithFee} ETH
+                </p>
+              )}
           </div>
         )}
 
@@ -299,59 +327,135 @@ export default function Deposit() {
               Withdrawal credentials – save this to withdraw
             </p>
             <p style={{ margin: "0 0 12px 0", fontSize: 12, color: "#92400e" }}>
-              Store these values securely. You need secret and nullifier to generate a withdrawal proof.
+              Store these values securely. You need secret and nullifier to
+              generate a withdrawal proof.
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div>
-                <label style={{ fontSize: 11, color: "#78716c", display: "block", marginBottom: 4 }}>Secret</label>
+                <label
+                  style={{
+                    fontSize: 11,
+                    color: "#78716c",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Secret
+                </label>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <code style={{ flex: 1, fontSize: 11, wordBreak: "break-all", background: "#fff", padding: 8, borderRadius: 4 }}>
+                  <code
+                    style={{
+                      flex: 1,
+                      fontSize: 11,
+                      wordBreak: "break-all",
+                      background: "#fff",
+                      padding: 8,
+                      borderRadius: 4,
+                    }}
+                  >
                     {lastDepositData.secret.toString()}
                   </code>
                   <button
                     type="button"
                     onClick={async () => {
-                      await navigator.clipboard.writeText(lastDepositData.secret.toString());
+                      await navigator.clipboard.writeText(
+                        lastDepositData.secret.toString(),
+                      );
                       setCopyFeedback("Secret copied");
                       setTimeout(() => setCopyFeedback(null), 2000);
                     }}
-                    style={{ padding: "6px 10px", fontSize: 12, whiteSpace: "nowrap" }}
+                    style={{
+                      padding: "6px 10px",
+                      fontSize: 12,
+                      whiteSpace: "nowrap",
+                    }}
                   >
                     Copy
                   </button>
                 </div>
               </div>
               <div>
-                <label style={{ fontSize: 11, color: "#78716c", display: "block", marginBottom: 4 }}>Nullifier</label>
+                <label
+                  style={{
+                    fontSize: 11,
+                    color: "#78716c",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Nullifier
+                </label>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <code style={{ flex: 1, fontSize: 11, wordBreak: "break-all", background: "#fff", padding: 8, borderRadius: 4 }}>
+                  <code
+                    style={{
+                      flex: 1,
+                      fontSize: 11,
+                      wordBreak: "break-all",
+                      background: "#fff",
+                      padding: 8,
+                      borderRadius: 4,
+                    }}
+                  >
                     {lastDepositData.nullifier.toString()}
                   </code>
                   <button
                     type="button"
                     onClick={async () => {
-                      await navigator.clipboard.writeText(lastDepositData.nullifier.toString());
+                      await navigator.clipboard.writeText(
+                        lastDepositData.nullifier.toString(),
+                      );
                       setCopyFeedback("Nullifier copied");
                       setTimeout(() => setCopyFeedback(null), 2000);
                     }}
-                    style={{ padding: "6px 10px", fontSize: 12, whiteSpace: "nowrap" }}
+                    style={{
+                      padding: "6px 10px",
+                      fontSize: 12,
+                      whiteSpace: "nowrap",
+                    }}
                   >
                     Copy
                   </button>
                 </div>
               </div>
               <div>
-                <label style={{ fontSize: 11, color: "#78716c", display: "block", marginBottom: 4 }}>Commitment</label>
-                <code style={{ display: "block", fontSize: 11, wordBreak: "break-all", background: "#fff", padding: 8, borderRadius: 4 }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    color: "#78716c",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Commitment
+                </label>
+                <code
+                  style={{
+                    display: "block",
+                    fontSize: 11,
+                    wordBreak: "break-all",
+                    background: "#fff",
+                    padding: 8,
+                    borderRadius: 4,
+                  }}
+                >
                   {lastDepositData.commitment.toString()}
                 </code>
               </div>
             </div>
-            <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div
+              style={{
+                marginTop: 12,
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 type="button"
                 onClick={async () => {
-                  const json = depositDataToJson(lastDepositData);
+                  const json = selectedPool
+                    ? depositDataToJson(lastDepositData, selectedPool.asset)
+                    : "";
                   await navigator.clipboard.writeText(json);
                   setCopyFeedback("All copied as JSON");
                   setTimeout(() => setCopyFeedback(null), 2000);
@@ -363,7 +467,10 @@ export default function Deposit() {
               <button
                 type="button"
                 onClick={() => {
-                  const blob = new Blob([depositDataToJson(lastDepositData)], { type: "application/json" });
+                  const json = selectedPool
+                    ? depositDataToJson(lastDepositData, selectedPool.asset)
+                    : "{}";
+                  const blob = new Blob([json], { type: "application/json" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
                   a.href = url;
@@ -377,7 +484,11 @@ export default function Deposit() {
               </button>
             </div>
             {copyFeedback && (
-              <p style={{ margin: "8px 0 0 0", fontSize: 12, color: "#059669" }}>{copyFeedback}</p>
+              <p
+                style={{ margin: "8px 0 0 0", fontSize: 12, color: "#059669" }}
+              >
+                {copyFeedback}
+              </p>
             )}
           </div>
         )}

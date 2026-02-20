@@ -1,8 +1,24 @@
 import { poseidon2 } from "poseidon-lite";
 import MerkleTree from "fixed-merkle-tree";
 import { WithdrawalProof } from "../types";
-import { computeCommitment, computeNullifierHash } from "./crypto";
+import {
+  computeCommitment,
+  computeNullifierHash,
+  ZERO_ADDRESS,
+} from "./crypto";
 import * as snarkjs from "snarkjs";
+import { config } from "./circuit";
+
+/** Load circuit buffer from URL (fetch) or base64 string. */
+async function loadCircuitValue(value: string): Promise<Buffer> {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    const res = await fetch(trimmed);
+    if (!res.ok) throw new Error(`Failed to fetch circuit: ${res.statusText}`);
+    return Buffer.from(await res.arrayBuffer());
+  }
+  return Buffer.from(trimmed, "base64");
+}
 
 /**
  * Build merkle tree from commitments
@@ -27,7 +43,7 @@ export function buildMerkleTree(commitments: bigint[]): MerkleTree {
  */
 export function getMerklePath(
   tree: MerkleTree,
-  commitment: bigint
+  commitment: bigint,
 ): { pathElements: bigint[]; pathIndices: number[] } {
   const commitmentIndex = tree.elements.indexOf(commitment.toString());
   if (commitmentIndex === -1) {
@@ -42,9 +58,9 @@ export function getMerklePath(
 }
 
 /**
- * Generate withdrawal proof
- * Note: This requires the circuit WASM and zkey files
- * In production, you should load these from your build directory
+ * Generate withdrawal proof.
+ * pubSignals: [nullifierHash, recipient, root, fee, relayer].
+ * Circuit WASM and zkey are read from config (import from "../config").
  */
 export async function generateWithdrawalProof(
   secret: bigint,
@@ -53,18 +69,25 @@ export async function generateWithdrawalProof(
   recipient: string,
   pathElements: bigint[],
   pathIndices: number[],
-  circuitWasm?: Buffer,
-  circuitZkey?: Buffer
+  fee: bigint = 0n,
+  relayer: string = ZERO_ADDRESS,
 ): Promise<WithdrawalProof> {
-  // If circuit files are not provided, return a placeholder structure
-  // In production, you should always provide these files
+  const nullifierHash = computeNullifierHash(nullifier);
+  const recipientBigInt = BigInt(recipient);
+  const relayerBigInt = BigInt(relayer);
+
+  let circuitWasm: Buffer | undefined;
+  let circuitZkey: Buffer | undefined;
+  const wasmVal = config.circuitWasm?.trim();
+  const zkeyVal = config.circuitZkey?.trim();
+  if (wasmVal && zkeyVal) {
+    circuitWasm = await loadCircuitValue(wasmVal);
+    circuitZkey = await loadCircuitValue(zkeyVal);
+  }
   if (!circuitWasm || !circuitZkey) {
     console.warn(
-      "Circuit files not provided. Returning placeholder proof structure."
+      "Circuit files not provided. Returning placeholder proof structure.",
     );
-    const nullifierHash = computeNullifierHash(nullifier);
-    const recipientBigInt = BigInt(recipient);
-
     return {
       pA: [0n, 0n],
       pB: [
@@ -72,32 +95,26 @@ export async function generateWithdrawalProof(
         [0n, 0n],
       ],
       pC: [0n, 0n],
-      pubSignals: [nullifierHash, recipientBigInt, root],
+      pubSignals: [nullifierHash, recipientBigInt, root, fee, relayerBigInt],
     };
   }
 
-  // Prepare inputs
   const input = {
     secret: secret.toString(),
     nullifier: nullifier.toString(),
     root: root.toString(),
-    recipient: BigInt(recipient).toString(),
+    recipient: recipientBigInt.toString(),
+    fee: fee.toString(),
+    relayer: relayerBigInt.toString(),
     pathElements: pathElements.map((e) => e.toString()),
     pathIndices: pathIndices.map((i) => i.toString()),
   };
-
-  
-  const nullifierHash = computeNullifierHash(nullifier);
-  const recipientBigInt = BigInt(recipient);
-
   try {
-    // This would require loading the witness calculator from your build
     const { proof, publicSignals } = await snarkjs.groth16.fullProve(
       input,
       circuitWasm,
-      circuitZkey
+      circuitZkey,
     );
-
     return {
       pA: [BigInt(proof.pi_a[0]), BigInt(proof.pi_a[1])],
       pB: [
@@ -108,12 +125,13 @@ export async function generateWithdrawalProof(
       pubSignals: publicSignals.map((x: string) => BigInt(x)) as [
         bigint,
         bigint,
-        bigint
+        bigint,
+        bigint,
+        bigint,
       ],
     };
   } catch (error) {
     console.error("Proof generation failed:", error);
-    // Return placeholder on error
     return {
       pA: [0n, 0n],
       pB: [
@@ -121,7 +139,7 @@ export async function generateWithdrawalProof(
         [0n, 0n],
       ],
       pC: [0n, 0n],
-      pubSignals: [nullifierHash, recipientBigInt, root],
+      pubSignals: [nullifierHash, recipientBigInt, root, fee, relayerBigInt],
     };
   }
 }
@@ -134,15 +152,19 @@ export interface WithdrawalProofData {
   nullifier: bigint;
   recipient: string;
   commitments: bigint[];
-  circuitWasm?: Buffer;
-  circuitZkey?: Buffer;
+  /** Fee (default 0n) */
+  fee?: bigint;
+  /** Relayer address (default ZERO_ADDRESS) */
+  relayer?: string;
 }
 
 /**
- * Generate complete withdrawal proof from deposit data
+ * Generate complete withdrawal proof from deposit data.
+ * Builds merkle tree from commitments, gets path for commitment(secret, nullifier), then generates proof.
+ * Circuit paths are read from config (see src/config.ts).
  */
 export async function generateWithdrawalProofFromData(
-  data: WithdrawalProofData
+  data: WithdrawalProofData,
 ): Promise<WithdrawalProof> {
   const commitment = computeCommitment(data.secret, data.nullifier);
   const tree = buildMerkleTree(data.commitments);
@@ -156,7 +178,7 @@ export async function generateWithdrawalProofFromData(
     data.recipient,
     path.pathElements,
     path.pathIndices,
-    data.circuitWasm,
-    data.circuitZkey
+    data.fee ?? 0n,
+    data.relayer ?? ZERO_ADDRESS,
   );
 }

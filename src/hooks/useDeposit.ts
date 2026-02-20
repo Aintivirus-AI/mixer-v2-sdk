@@ -11,7 +11,6 @@ import type { TransactionResult, DepositData } from "../types";
 import { useAccount } from "wagmi";
 import { useMixer } from "./context";
 import { generateSecretAndNullifier, computeCommitment } from "../utils/crypto";
-import { ETH_ADDRESS } from "../evm";
 
 export interface DepositResult extends TransactionResult {
   /** Save this (secret, nullifier) to generate withdrawal proof later. */
@@ -28,8 +27,11 @@ export interface UseDepositReturn {
     assetAddress: string,
     amount: bigint
   ) => Promise<DepositResult>;
-  /** Total to pay (amount + fee). Use for display or approval. */
-  calculateDepositAmount: (amount: bigint) => Promise<bigint>;
+  /** Total to pay (amount + protocol fee + partner fee). Use for display or approval. */
+  calculateDepositAmount: (
+    amount: bigint,
+    partnerAddress?: string,
+  ) => Promise<bigint>;
   /** Check if a mixer is deployed for this asset and amount. */
   mixerExists: (assetAddress: string, amount: bigint) => Promise<boolean>;
   isReady: boolean;
@@ -85,11 +87,8 @@ export function useDeposit(/* options?: SolanaConnectionOptions */): UseDepositR
       const commitment = computeCommitment(secret, nullifier);
 
       if (isEVMReady && evmSDK) {
-        const isEth =
-          assetAddress.toLowerCase() === ETH_ADDRESS.toLowerCase();
-        const result = isEth
-          ? await evmSDK.depositEth(amount, commitment)
-          : await evmSDK.depositToken(amount, commitment);
+        const result = await evmSDK.deposit(assetAddress, amount, commitment);
+        const isEth = await evmSDK.isWethAsset(assetAddress);
         const mode = isEth ? AssetMode.ETH : AssetMode.TOKEN;
         return {
           ...result,
@@ -106,9 +105,15 @@ export function useDeposit(/* options?: SolanaConnectionOptions */): UseDepositR
   );
 
   const calculateDepositAmount = useCallback(
-    async (amount: bigint): Promise<bigint> => {
+    async (
+      amount: bigint,
+      partnerAddress?: string,
+    ): Promise<bigint> => {
       if (isEVMReady && evmSDK) {
-        return evmSDK.calculateDepositAmount(amount);
+        return evmSDK.calculateDepositAmount(
+          amount,
+          partnerAddress ?? "0x0000000000000000000000000000000000000000",
+        );
       }
       // if (isSolanaReady && solanaSDK) { return solanaSDK.calculateDepositAmount(amount); }
       throw new Error(

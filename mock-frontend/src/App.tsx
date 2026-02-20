@@ -7,11 +7,15 @@ import {
   useSwitchChain,
 } from "wagmi";
 import { useMixerConfig } from "@aintivirus-ai/mixer-sdk";
+import Admin from "./pages/Admin";
 import Deploy from "./pages/Deploy";
+import Partners from "./pages/Partners";
 import Deposit from "./pages/Deposit";
+import Withdraw from "./pages/Withdraw";
+import Payment from "./pages/Payment";
 import Subgraph from "./pages/Subgraph";
 
-type Tab = "deploy" | "deposit" | "subgraph";
+type Tab = "admin" | "partners" | "deploy" | "deposit" | "withdraw" | "payment" | "subgraph";
 
 function App() {
   const [tab, setTab] = useState<Tab>("deploy");
@@ -148,13 +152,46 @@ function App() {
       >
         <button
           type="button"
+          onClick={() => setTab("admin")}
+          style={{
+            padding: "12px 20px",
+            background: tab === "admin" ? "#1a1a2e" : "transparent",
+            color: tab === "admin" ? "#fff" : "#aaa",
+            border: "none",
+            borderBottom:
+              tab === "admin" ? "2px solid #4361ee" : "2px solid transparent",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+          }}
+        >
+          Admin
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("partners")}
+          style={{
+            padding: "12px 20px",
+            background: tab === "partners" ? "#1a1a2e" : "transparent",
+            color: tab === "partners" ? "#fff" : "#aaa",
+            border: "none",
+            borderBottom:
+              tab === "partners" ? "2px solid #4361ee" : "2px solid transparent",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+          }}
+        >
+          Partners
+        </button>
+        <button
+          type="button"
           onClick={() => setTab("deploy")}
           style={{
             padding: "12px 20px",
             background: tab === "deploy" ? "#1a1a2e" : "transparent",
             color: tab === "deploy" ? "#fff" : "#aaa",
             border: "none",
-            borderBottom: tab === "deploy" ? "2px solid #4361ee" : "2px solid transparent",
+            borderBottom:
+              tab === "deploy" ? "2px solid #4361ee" : "2px solid transparent",
             cursor: "pointer",
             fontSize: "0.9rem",
           }}
@@ -169,12 +206,49 @@ function App() {
             background: tab === "deposit" ? "#1a1a2e" : "transparent",
             color: tab === "deposit" ? "#fff" : "#aaa",
             border: "none",
-            borderBottom: tab === "deposit" ? "2px solid #4361ee" : "2px solid transparent",
+            borderBottom:
+              tab === "deposit" ? "2px solid #4361ee" : "2px solid transparent",
             cursor: "pointer",
             fontSize: "0.9rem",
           }}
         >
           Deposit
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("withdraw")}
+          style={{
+            padding: "12px 20px",
+            background: tab === "withdraw" ? "#1a1a2e" : "transparent",
+            color: tab === "withdraw" ? "#fff" : "#aaa",
+            border: "none",
+            borderBottom:
+              tab === "withdraw"
+                ? "2px solid #4361ee"
+                : "2px solid transparent",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+          }}
+        >
+          Withdraw
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("payment")}
+          style={{
+            padding: "12px 20px",
+            background: tab === "payment" ? "#1a1a2e" : "transparent",
+            color: tab === "payment" ? "#fff" : "#aaa",
+            border: "none",
+            borderBottom:
+              tab === "payment"
+                ? "2px solid #4361ee"
+                : "2px solid transparent",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+          }}
+        >
+          Payment
         </button>
         <button
           type="button"
@@ -184,7 +258,10 @@ function App() {
             background: tab === "subgraph" ? "#1a1a2e" : "transparent",
             color: tab === "subgraph" ? "#fff" : "#aaa",
             border: "none",
-            borderBottom: tab === "subgraph" ? "2px solid #4361ee" : "2px solid transparent",
+            borderBottom:
+              tab === "subgraph"
+                ? "2px solid #4361ee"
+                : "2px solid transparent",
             cursor: "pointer",
             fontSize: "0.9rem",
           }}
@@ -202,8 +279,12 @@ function App() {
           width: "100%",
         }}
       >
+        {tab === "admin" && <Admin />}
+        {tab === "partners" && <Partners />}
         {tab === "deploy" && <Deploy />}
         {tab === "deposit" && <Deposit />}
+        {tab === "withdraw" && <Withdraw />}
+        {tab === "payment" && <Payment />}
         {tab === "subgraph" && <Subgraph />}
       </main>
     </div>
