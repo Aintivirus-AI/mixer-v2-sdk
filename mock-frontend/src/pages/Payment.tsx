@@ -60,7 +60,9 @@ export default function Payment() {
   const [addTokenInput, setAddTokenInput] = useState("");
   const [orderList, setOrderList] = useState<PaymentProcessedEntity[]>([]);
   const [orderListLoading, setOrderListLoading] = useState(false);
-  const [updateTokenLoading, setUpdateTokenLoading] = useState<string | null>(null);
+  const [updateTokenLoading, setUpdateTokenLoading] = useState<string | null>(
+    null,
+  );
   const [tokenError, setTokenError] = useState<string | null>(null);
 
   const chainId = useChainId();
@@ -80,8 +82,12 @@ export default function Payment() {
   const evmChainConfig =
     chainId != null ? getEvmChainConfig(chainId) : undefined;
   const subgraphUrl = evmChainConfig?.subgraphUrl;
-  const wethAddress = (evmChainConfig as { wethAddress?: string } | undefined)?.wethAddress?.toLowerCase();
-  const hasGateway = !!(evmChainConfig as { wethGatewayAddress?: string } | undefined)?.wethGatewayAddress;
+  const wethAddress = (
+    evmChainConfig as { wethAddress?: string } | undefined
+  )?.wethAddress?.toLowerCase();
+  const hasGateway = !!(
+    evmChainConfig as { wethGatewayAddress?: string } | undefined
+  )?.wethGatewayAddress;
 
   const subgraph = useMemo(() => {
     if (!subgraphUrl) return null;
@@ -243,7 +249,9 @@ export default function Payment() {
       try {
         amount = BigInt(amountInput.trim());
       } catch {
-        setPayError("Invalid amount (use integer wei/smallest unit for token).");
+        setPayError(
+          "Invalid amount (use integer wei/smallest unit for token).",
+        );
         return;
       }
     }
@@ -271,13 +279,21 @@ export default function Payment() {
         const result = await payWithRecipientViaGateway(orderId, buyer, amount);
         setTxHash(result.txHash);
       } else {
-        const result = await payWithRecipient(orderId, tokenAddress.trim(), buyer, amount);
+        const result = await payWithRecipient(
+          orderId,
+          tokenAddress.trim(),
+          buyer,
+          amount,
+        );
         setTxHash(result.txHash);
       }
       await fetchPaymentInfo();
       setMyPayments(await getPaymentDetailsOfRef.current(address!));
     } catch (e) {
-      const err = e as Error & { reason?: string; error?: { message?: string } };
+      const err = e as Error & {
+        reason?: string;
+        error?: { message?: string };
+      };
       const message = err?.message ?? String(e);
       const reason = err?.reason ?? err?.error?.message;
       setPayError(reason || message || "Payment failed");
@@ -294,7 +310,11 @@ export default function Payment() {
     try {
       await updateAllowedToken(token, true);
       setAddTokenInput("");
-      const events = await (subgraph as unknown as { getTokenUpdatedList: (p?: object) => Promise<TokenUpdatedEntity[]> }).getTokenUpdatedList({ first: 500, orderDirection: "desc" });
+      const events = await (
+        subgraph as unknown as {
+          getTokenUpdatedList: (p?: object) => Promise<TokenUpdatedEntity[]>;
+        }
+      ).getTokenUpdatedList({ first: 500, orderDirection: "desc" });
       setAllowedTokensList(allowedTokensFromEvents(events));
     } catch (e) {
       setTokenError(e instanceof Error ? e.message : "Failed to add token");
@@ -308,7 +328,11 @@ export default function Payment() {
     setUpdateTokenLoading(token);
     try {
       await updateAllowedToken(token, false);
-      const events = await (subgraph as unknown as { getTokenUpdatedList: (p?: object) => Promise<TokenUpdatedEntity[]> }).getTokenUpdatedList({ first: 500, orderDirection: "desc" });
+      const events = await (
+        subgraph as unknown as {
+          getTokenUpdatedList: (p?: object) => Promise<TokenUpdatedEntity[]>;
+        }
+      ).getTokenUpdatedList({ first: 500, orderDirection: "desc" });
       setAllowedTokensList(allowedTokensFromEvents(events));
     } catch (e) {
       setTokenError(e instanceof Error ? e.message : "Failed to remove token");
@@ -366,10 +390,12 @@ export default function Payment() {
       <p style={{ fontSize: 14, color: "#666", marginBottom: 24 }}>
         Select a token, then enter order ID, buyer, and amount.{" "}
         <strong>ETH</strong>: only via Gateway (native ETH).{" "}
-        <strong>WETH / ERC20</strong>: payment contract (allowance is applied automatically if needed; first Pay may send approve then pay).
+        <strong>WETH / ERC20</strong>: payment contract (allowance is applied
+        automatically if needed; first Pay may send approve then pay).
       </p>
 
-      {(paymentAddress == null || paymentAddress === "0x0000000000000000000000000000000000000000") && (
+      {(paymentAddress == null ||
+        paymentAddress === "0x0000000000000000000000000000000000000000") && (
         <div
           style={{
             padding: 12,
@@ -393,7 +419,9 @@ export default function Payment() {
           marginBottom: 24,
         }}
       >
-        <h3 style={{ margin: "0 0 16px 0", fontSize: 16 }}>Pay with recipient</h3>
+        <h3 style={{ margin: "0 0 16px 0", fontSize: 16 }}>
+          Pay with recipient
+        </h3>
         <div style={{ marginBottom: 12 }}>
           <label style={{ display: "block", fontSize: 14, marginBottom: 6 }}>
             Order ID (bytes32 hex or any string to hash)
@@ -444,7 +472,8 @@ export default function Payment() {
           </select>
           {isPayingWithNativeEth && (
             <p style={{ margin: "6px 0 0", fontSize: 12, color: "#059669" }}>
-              Paying with native ETH via Gateway. Enter amount in ETH (e.g. 0.01).
+              Paying with native ETH via Gateway. Enter amount in ETH (e.g.
+              0.01).
             </p>
           )}
           {!isPayingWithNativeEth && tokenAddress && tokenAllowed !== null && (
@@ -480,13 +509,17 @@ export default function Payment() {
         </div>
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: "block", fontSize: 14, marginBottom: 6 }}>
-            {isPayingWithNativeEth ? "Amount (ETH, e.g. 0.01)" : "Amount (smallest unit / wei)"}
+            {isPayingWithNativeEth
+              ? "Amount (ETH, e.g. 0.01)"
+              : "Amount (smallest unit / wei)"}
           </label>
           <input
             type="text"
             value={amountInput}
             onChange={(e) => setAmountInput(e.target.value)}
-            placeholder={isPayingWithNativeEth ? "0.01" : "e.g. 1000000000000000000"}
+            placeholder={
+              isPayingWithNativeEth ? "0.01" : "e.g. 1000000000000000000"
+            }
             style={{
               width: "100%",
               padding: "8px 12px",
@@ -557,7 +590,14 @@ export default function Payment() {
             {tokenError}
           </p>
         )}
-        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            marginBottom: 12,
+            flexWrap: "wrap",
+          }}
+        >
           <input
             type="text"
             value={addTokenInput}
@@ -576,11 +616,7 @@ export default function Payment() {
           <button
             type="button"
             onClick={handleAddToken}
-            disabled={
-              !addTokenInput.trim() ||
-              !!updateTokenLoading ||
-              !isReady
-            }
+            disabled={!addTokenInput.trim() || !!updateTokenLoading || !isReady}
             style={{
               padding: "8px 16px",
               background: "#059669",
@@ -613,7 +649,9 @@ export default function Payment() {
                   marginBottom: 6,
                 }}
               >
-                <span style={{ fontFamily: "monospace" }}>{formatAddress(t)}</span>
+                <span style={{ fontFamily: "monospace" }}>
+                  {formatAddress(t)}
+                </span>
                 <button
                   type="button"
                   onClick={() => handleRemoveToken(t)}
@@ -668,11 +706,21 @@ export default function Payment() {
           >
             <thead>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                <th style={{ textAlign: "left", padding: "8px 12px" }}>Order ID</th>
-                <th style={{ textAlign: "left", padding: "8px 12px" }}>Buyer</th>
-                <th style={{ textAlign: "left", padding: "8px 12px" }}>Token</th>
-                <th style={{ textAlign: "right", padding: "8px 12px" }}>Amount</th>
-                <th style={{ textAlign: "right", padding: "8px 12px" }}>Block</th>
+                <th style={{ textAlign: "left", padding: "8px 12px" }}>
+                  Order ID
+                </th>
+                <th style={{ textAlign: "left", padding: "8px 12px" }}>
+                  Buyer
+                </th>
+                <th style={{ textAlign: "left", padding: "8px 12px" }}>
+                  Token
+                </th>
+                <th style={{ textAlign: "right", padding: "8px 12px" }}>
+                  Amount
+                </th>
+                <th style={{ textAlign: "right", padding: "8px 12px" }}>
+                  Block
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -775,12 +823,8 @@ export default function Payment() {
                   <th style={{ textAlign: "left", padding: "8px 8px 8px 0" }}>
                     Order ID
                   </th>
-                  <th style={{ textAlign: "right", padding: "8px" }}>
-                    Amount
-                  </th>
-                  <th style={{ textAlign: "left", padding: "8px" }}>
-                    Token
-                  </th>
+                  <th style={{ textAlign: "right", padding: "8px" }}>Amount</th>
+                  <th style={{ textAlign: "left", padding: "8px" }}>Token</th>
                 </tr>
               </thead>
               <tbody>

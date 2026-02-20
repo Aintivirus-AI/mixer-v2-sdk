@@ -13,9 +13,10 @@ import Partners from "./pages/Partners";
 import Deposit from "./pages/Deposit";
 import Withdraw from "./pages/Withdraw";
 import Payment from "./pages/Payment";
+import Stake from "./pages/Stake";
 import Subgraph from "./pages/Subgraph";
 
-type Tab = "admin" | "partners" | "deploy" | "deposit" | "withdraw" | "payment" | "subgraph";
+type Tab = "admin" | "partners" | "deploy" | "deposit" | "withdraw" | "payment" | "stake" | "subgraph";
 
 function App() {
   const [tab, setTab] = useState<Tab>("deploy");
@@ -252,6 +253,22 @@ function App() {
         </button>
         <button
           type="button"
+          onClick={() => setTab("stake")}
+          style={{
+            padding: "12px 20px",
+            background: tab === "stake" ? "#1a1a2e" : "transparent",
+            color: tab === "stake" ? "#fff" : "#aaa",
+            border: "none",
+            borderBottom:
+              tab === "stake" ? "2px solid #4361ee" : "2px solid transparent",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+          }}
+        >
+          Stake
+        </button>
+        <button
+          type="button"
           onClick={() => setTab("subgraph")}
           style={{
             padding: "12px 20px",
@@ -285,6 +302,7 @@ function App() {
         {tab === "deposit" && <Deposit />}
         {tab === "withdraw" && <Withdraw />}
         {tab === "payment" && <Payment />}
+        {tab === "stake" && <Stake />}
         {tab === "subgraph" && <Subgraph />}
       </main>
     </div>

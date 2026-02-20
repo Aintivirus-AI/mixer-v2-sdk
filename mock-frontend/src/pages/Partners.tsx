@@ -209,18 +209,23 @@ export default function Partners() {
       </p>
 
       {amIPartner === true && (
-        <div
+        <section
           style={{
-            padding: 12,
-            background: "#1e3a2f",
+            padding: 20,
+            background: "#16213e",
             borderRadius: 8,
-            border: "1px solid #22c55e",
-            color: "#86efac",
+            border: "1px solid #2a2a4a",
+            borderLeft: "4px solid #22c55e",
           }}
         >
-          You are a registered white-label partner. Use &quot;Set My Extra Fee&quot;
-          below to update your fee.
-        </div>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem" }}>
+            Partner status
+          </h3>
+          <p style={{ color: "#86efac", margin: 0, fontSize: "0.875rem" }}>
+            You are a registered white-label partner. Use &quot;Set My Extra Fee&quot;
+            below to update your fee.
+          </p>
+        </section>
       )}
 
       {/* Lookup */}

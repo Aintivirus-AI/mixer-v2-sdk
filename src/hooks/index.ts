@@ -22,6 +22,12 @@ export type { UseDepositReturn, DepositResult } from "./useDeposit";
 export { useWithdraw } from "./useWithdraw";
 export type { UseWithdrawReturn, WithdrawParams } from "./useWithdraw";
 
+export { useWithdrawByGiftCard } from "./useWithdrawByGiftCard";
+export type {
+  UseWithdrawByGiftCardReturn,
+  WithdrawByGiftCardParams,
+} from "./useWithdrawByGiftCard";
+
 export { useAdmin } from "./useAdmin";
 export type { UseAdminReturn } from "./useAdmin";
 

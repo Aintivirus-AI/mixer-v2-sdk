@@ -57,6 +57,7 @@ export {
   useDeploy,
   useDeposit,
   useWithdraw,
+  useWithdrawByGiftCard,
   useAdmin,
   usePayment,
 } from "./hooks";
@@ -67,6 +68,8 @@ export type {
   DepositResult,
   UseWithdrawReturn,
   WithdrawParams,
+  UseWithdrawByGiftCardReturn,
+  WithdrawByGiftCardParams,
   UseAdminReturn,
   UsePaymentReturn,
   PaymentRecord,

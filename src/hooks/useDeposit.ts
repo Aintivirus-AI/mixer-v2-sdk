@@ -22,10 +22,12 @@ export interface UseDepositReturn {
    * Deposit into the mixer for the given asset and amount.
    * Commitment is generated automatically. Returns depositData for later withdrawal.
    * Fails if no mixer is deployed for this asset+amount.
+   * @param partnerAddress Optional white-label partner address for extra fee; use zero or omit for none.
    */
   deposit: (
     assetAddress: string,
-    amount: bigint
+    amount: bigint,
+    partnerAddress?: string,
   ) => Promise<DepositResult>;
   /** Total to pay (amount + protocol fee + partner fee). Use for display or approval. */
   calculateDepositAmount: (
@@ -71,10 +73,13 @@ export function useDeposit(/* options?: SolanaConnectionOptions */): UseDepositR
     [evmSDK, isEVMReady]
   );
 
+  const zeroAddress = "0x0000000000000000000000000000000000000000";
+
   const deposit = useCallback(
     async (
       assetAddress: string,
-      amount: bigint
+      amount: bigint,
+      partnerAddress?: string,
     ): Promise<DepositResult> => {
       const exists = await mixerExists(assetAddress, amount);
       if (!exists) {
@@ -85,9 +90,17 @@ export function useDeposit(/* options?: SolanaConnectionOptions */): UseDepositR
 
       const { secret, nullifier } = generateSecretAndNullifier();
       const commitment = computeCommitment(secret, nullifier);
+      const partner = (partnerAddress?.trim() || zeroAddress).toLowerCase();
+      const effectivePartner =
+        partner === "" || partner === zeroAddress ? zeroAddress : partner;
 
       if (isEVMReady && evmSDK) {
-        const result = await evmSDK.deposit(assetAddress, amount, commitment);
+        const result = await evmSDK.deposit(
+          assetAddress,
+          amount,
+          commitment,
+          effectivePartner,
+        );
         const isEth = await evmSDK.isWethAsset(assetAddress);
         const mode = isEth ? AssetMode.ETH : AssetMode.TOKEN;
         return {

@@ -1,21 +1,51 @@
-import { useState } from "react";
-import { useAdmin, useMixerConfig } from "@aintivirus-ai/mixer-sdk";
+import { useState, useEffect, useMemo } from "react";
+import {
+  useAdmin,
+  useMixerConfig,
+  AintiVirusEVMSubgraph,
+} from "@aintivirus-ai/mixer-sdk";
+import type { MixerPool } from "@aintivirus-ai/mixer-sdk";
+import { formatEther } from "ethers";
 import { useChainId, useAccount } from "wagmi";
 
 const EXPLORER_TX = (hash: string) => `https://sepolia.etherscan.io/tx/${hash}`;
+
+function formatAddress(addr: string): string {
+  if (!addr || addr.length < 12) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function poolOptionLabel(pool: MixerPool, wethAddress?: string): string {
+  const isEth = wethAddress
+    ? pool.asset.toLowerCase() === wethAddress.toLowerCase()
+    : false;
+  const amountStr = isEth
+    ? `${formatEther(pool.amount)} ETH`
+    : `${pool.amount.toString()} (raw)`;
+  const assetStr = isEth ? "ETH" : formatAddress(pool.asset);
+  return `${assetStr} – ${amountStr}`;
+}
 
 export default function Admin() {
   const [feeRateBps, setFeeRateBps] = useState("25");
   const [seasonPeriodSec, setSeasonPeriodSec] = useState("86400");
   const [feeCollector, setFeeCollector] = useState("");
   const [rewardPoolShareBps, setRewardPoolShareBps] = useState("5000");
-  const [currentFeeCollector, setCurrentFeeCollector] = useState<string | null>(null);
-  const [currentRewardPoolBps, setCurrentRewardPoolBps] = useState<string | null>(null);
+  const [currentFeeCollector, setCurrentFeeCollector] = useState<string | null>(
+    null,
+  );
+  const [currentRewardPoolBps, setCurrentRewardPoolBps] = useState<
+    string | null
+  >(null);
   const [paymentAddress, setPaymentAddress] = useState("");
-  const [currentPaymentAddress, setCurrentPaymentAddress] = useState<string | null>(null);
-  const [giftCardAsset, setGiftCardAsset] = useState("");
-  const [giftCardAmount, setGiftCardAmount] = useState("");
+  const [currentPaymentAddress, setCurrentPaymentAddress] = useState<
+    string | null
+  >(null);
+  const [giftCardPoolId, setGiftCardPoolId] = useState("");
   const [giftCardEnabled, setGiftCardEnabled] = useState(true);
+  const [pools, setPools] = useState<MixerPool[]>([]);
+  const [poolsLoading, setPoolsLoading] = useState(true);
+  const [poolsError, setPoolsError] = useState<string | null>(null);
   const [isSettingFee, setIsSettingFee] = useState(false);
   const [isSettingPeriod, setIsSettingPeriod] = useState(false);
   const [isStartingSeason, setIsStartingSeason] = useState(false);
@@ -27,7 +57,51 @@ export default function Admin() {
 
   const chainId = useChainId();
   const { isConnected } = useAccount();
-  const { evmChainIds } = useMixerConfig();
+  const { getEvmChainConfig, evmChainIds } = useMixerConfig();
+  const evmChainConfig =
+    chainId != null ? getEvmChainConfig(chainId) : undefined;
+  const subgraphUrl = evmChainConfig?.subgraphUrl;
+  const wethAddress = evmChainConfig?.wethAddress;
+  const subgraph = useMemo(() => {
+    if (!subgraphUrl) return null;
+    return new AintiVirusEVMSubgraph({ endpoint: subgraphUrl });
+  }, [subgraphUrl]);
+
+  useEffect(() => {
+    if (!subgraph) {
+      setPools([]);
+      setPoolsLoading(false);
+      setPoolsError(null);
+      return;
+    }
+    let cancelled = false;
+    setPoolsLoading(true);
+    setPoolsError(null);
+    subgraph
+      .getMixerPools({
+        first: 100,
+        orderBy: "deployedBlockTimestamp",
+        orderDirection: "desc",
+      })
+      .then((data) => {
+        if (!cancelled) setPools(data ?? []);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setPoolsError(
+            e instanceof Error ? e.message : "Failed to load mixers",
+          );
+          setPools([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPoolsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [subgraph]);
+
   const {
     setFeeRate,
     setStakingSeasonPeriod,
@@ -108,7 +182,11 @@ export default function Admin() {
       ]);
       setCurrentFeeCollector(collector);
       setCurrentRewardPoolBps(bps.toString());
-      setCurrentPaymentAddress(payment && payment !== "0x0000000000000000000000000000000000000000" ? payment : null);
+      setCurrentPaymentAddress(
+        payment && payment !== "0x0000000000000000000000000000000000000000"
+          ? payment
+          : null,
+      );
     } catch (e) {
       console.error("Load current:", e);
     }
@@ -195,32 +273,35 @@ export default function Admin() {
       setCurrentPaymentAddress(addr);
     } catch (error: unknown) {
       console.error("setPayment error:", error);
-      alert(`Failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      alert(
+        `Failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setIsSettingPayment(false);
     }
   };
 
   const handleSetGiftCard = async () => {
-    const asset = giftCardAsset.trim();
-    if (!/^0x[a-fA-F0-9]{40}$/.test(asset)) {
-      alert("Enter a valid asset address (0x…)");
-      return;
-    }
-    const amount = BigInt(giftCardAmount.trim());
-    if (amount <= 0n) {
-      alert("Amount must be positive");
+    const pool = pools.find((p) => p.id === giftCardPoolId);
+    if (!pool) {
+      alert("Select a mixer from the list.");
       return;
     }
     if (!isReady) return;
     setIsSettingGiftCard(true);
     setLastTxHash(null);
     try {
-      const result = await setMixerGiftCardEnabledTx(asset, amount, giftCardEnabled);
+      const result = await setMixerGiftCardEnabledTx(
+        pool.asset,
+        pool.amount,
+        giftCardEnabled,
+      );
       setLastTxHash(result.txHash);
     } catch (error: unknown) {
       console.error("setMixerGiftCardEnabled error:", error);
-      alert(`Failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      alert(
+        `Failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setIsSettingGiftCard(false);
     }
@@ -261,38 +342,59 @@ export default function Admin() {
         factory.
       </p>
 
-      <button
-        type="button"
-        onClick={handleLoadCurrent}
+      {/* Load current values */}
+      <section
         style={{
-          padding: "6px 12px",
-          background: "#2a2a4a",
-          color: "#ccc",
-          border: "1px solid #444",
-          borderRadius: 6,
-          cursor: "pointer",
-          alignSelf: "flex-start",
+          padding: 20,
+          background: "#16213e",
+          borderRadius: 8,
+          border: "1px solid #2a2a4a",
         }}
       >
-        Load current values
-      </button>
-
-      {currentFeeCollector != null && (
-        <p style={{ margin: 0, fontSize: "0.875rem", color: "#aaa" }}>
-          Fee collector: {currentFeeCollector.slice(0, 10)}…{currentFeeCollector.slice(-8)}
+        <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
+          Current factory config
+        </h3>
+        <p
+          style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}
+        >
+          Load and view fee collector, reward pool share, and payment contract.
         </p>
-      )}
-      {currentRewardPoolBps != null && (
-        <p style={{ margin: 0, fontSize: "0.875rem", color: "#aaa" }}>
-          Reward pool share: {currentRewardPoolBps} bps (
-          {Number(currentRewardPoolBps) / 100}%)
-        </p>
-      )}
-      {currentPaymentAddress != null && (
-        <p style={{ margin: 0, fontSize: "0.875rem", color: "#aaa" }}>
-          Payment: {currentPaymentAddress.slice(0, 10)}…{currentPaymentAddress.slice(-8)}
-        </p>
-      )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            type="button"
+            onClick={handleLoadCurrent}
+            style={{
+              padding: "8px 16px",
+              background: "#4361ee",
+              color: "white",
+              border: "none",
+              borderRadius: 6,
+              cursor: "pointer",
+              alignSelf: "flex-start",
+            }}
+          >
+            Load current values
+          </button>
+          {currentFeeCollector != null && (
+            <p style={{ margin: 0, fontSize: "0.875rem", color: "#aaa" }}>
+              Fee collector: {currentFeeCollector.slice(0, 10)}…
+              {currentFeeCollector.slice(-8)}
+            </p>
+          )}
+          {currentRewardPoolBps != null && (
+            <p style={{ margin: 0, fontSize: "0.875rem", color: "#aaa" }}>
+              Reward pool share: {currentRewardPoolBps} bps (
+              {Number(currentRewardPoolBps) / 100}%)
+            </p>
+          )}
+          {currentPaymentAddress != null && (
+            <p style={{ margin: 0, fontSize: "0.875rem", color: "#aaa" }}>
+              Payment: {currentPaymentAddress.slice(0, 10)}…
+              {currentPaymentAddress.slice(-8)}
+            </p>
+          )}
+        </div>
+      </section>
 
       {/* Set Payment */}
       <section
@@ -306,8 +408,11 @@ export default function Admin() {
         <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
           Set Payment Contract
         </h3>
-        <p style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}>
-          AintiVirusPayment contract address for gift card withdrawals. Requires OPERATOR_ROLE.
+        <p
+          style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}
+        >
+          AintiVirusPayment contract address for gift card withdrawals. Requires
+          OPERATOR_ROLE.
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input
@@ -355,40 +460,64 @@ export default function Admin() {
         <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
           Gift Card Withdrawals (per mixer)
         </h3>
-        <p style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}>
-          Enable or disable gift card withdrawals for a specific mixer (asset + amount). Requires OPERATOR_ROLE.
+        <p
+          style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}
+        >
+          Enable or disable gift card withdrawals for a deployed mixer. Select a
+          mixer from the list, then toggle and save. Requires OPERATOR_ROLE.
         </p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <input
-            type="text"
-            value={giftCardAsset}
-            onChange={(e) => setGiftCardAsset(e.target.value)}
-            placeholder="Asset address (0x...)"
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          {poolsLoading ? (
+            <span style={{ color: "#aaa", fontSize: "0.875rem" }}>
+              Loading mixer list…
+            </span>
+          ) : poolsError ? (
+            <span style={{ color: "#f87171", fontSize: "0.875rem" }}>
+              {poolsError}
+            </span>
+          ) : pools.length === 0 ? (
+            <span style={{ color: "#aaa", fontSize: "0.875rem" }}>
+              No deployed mixers on this chain.
+            </span>
+          ) : (
+            <select
+              value={giftCardPoolId}
+              onChange={(e) => setGiftCardPoolId(e.target.value)}
+              disabled={isSettingGiftCard}
+              style={{
+                padding: "8px 12px",
+                background: "#1a1a2e",
+                color: "#eee",
+                border: "1px solid #444",
+                borderRadius: 6,
+                minWidth: 260,
+                fontFamily: "monospace",
+                fontSize: "0.875rem",
+              }}
+            >
+              <option value="">Select a mixer…</option>
+              {pools.map((pool) => (
+                <option key={pool.id} value={pool.id}>
+                  {poolOptionLabel(pool, wethAddress)}
+                </option>
+              ))}
+            </select>
+          )}
+          <label
             style={{
-              padding: "8px 12px",
-              background: "#1a1a2e",
-              color: "#eee",
-              border: "1px solid #444",
-              borderRadius: 6,
-              minWidth: 280,
-              fontFamily: "monospace",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              color: "#aaa",
             }}
-          />
-          <input
-            type="text"
-            value={giftCardAmount}
-            onChange={(e) => setGiftCardAmount(e.target.value)}
-            placeholder="Amount (wei)"
-            style={{
-              padding: "8px 12px",
-              background: "#1a1a2e",
-              color: "#eee",
-              border: "1px solid #444",
-              borderRadius: 6,
-              width: 160,
-            }}
-          />
-          <label style={{ display: "flex", alignItems: "center", gap: 6, color: "#aaa" }}>
+          >
             <input
               type="checkbox"
               checked={giftCardEnabled}
@@ -399,14 +528,18 @@ export default function Admin() {
           <button
             type="button"
             onClick={handleSetGiftCard}
-            disabled={isSettingGiftCard}
+            disabled={isSettingGiftCard || !giftCardPoolId}
             style={{
               padding: "8px 16px",
-              background: "#4361ee",
+              background:
+                giftCardPoolId && !isSettingGiftCard ? "#4361ee" : "#444",
               color: "white",
               border: "none",
               borderRadius: 6,
-              cursor: isSettingGiftCard ? "not-allowed" : "pointer",
+              cursor:
+                isSettingGiftCard || !giftCardPoolId
+                  ? "not-allowed"
+                  : "pointer",
             }}
           >
             {isSettingGiftCard ? "Setting…" : "Set Gift Card"}
@@ -426,9 +559,11 @@ export default function Admin() {
         <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
           Set Fee Collector
         </h3>
-        <p style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}>
-          Address that receives the fee collector share of deposit fees. Requires
-          DEFAULT_ADMIN_ROLE.
+        <p
+          style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}
+        >
+          Address that receives the fee collector share of deposit fees.
+          Requires DEFAULT_ADMIN_ROLE.
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input
@@ -476,7 +611,9 @@ export default function Admin() {
         <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
           Set Reward Pool Share
         </h3>
-        <p style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}>
+        <p
+          style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}
+        >
           Share of deposit fees to the reward pool (rest goes to admin wallet).
           Basis points 0–10000 (e.g., 5000 = 50%).
         </p>
@@ -522,10 +659,10 @@ export default function Admin() {
           border: "1px solid #2a2a4a",
         }}
       >
-        <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
-          Set Fee Rate
-        </h3>
-        <p style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}>
+        <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>Set Fee Rate</h3>
+        <p
+          style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}
+        >
           Fee in basis points (e.g., 25 = 0.25%). Max 500 (5%).
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -573,7 +710,9 @@ export default function Admin() {
         <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
           Set Staking Season Period
         </h3>
-        <p style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}>
+        <p
+          style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}
+        >
           Duration in seconds for the next season (e.g., 86400 = 1 day).
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -621,7 +760,9 @@ export default function Admin() {
         <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
           Start New Stake Season
         </h3>
-        <p style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}>
+        <p
+          style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}
+        >
           Start a new staking season with the configured period.
         </p>
         <button

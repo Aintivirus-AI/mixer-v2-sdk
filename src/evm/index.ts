@@ -1,4 +1,11 @@
-import { Contract, Signer, Provider, type InterfaceAbi } from "ethers";
+import {
+  Contract,
+  Signer,
+  Provider,
+  type InterfaceAbi,
+  keccak256,
+  toUtf8Bytes,
+} from "ethers";
 import {
   AssetMode,
   WithdrawalProof,
@@ -41,6 +48,16 @@ function toBigint(value: unknown): bigint {
     return BigInt((value as { data: string }).data);
   }
   throw new Error(`Expected bigint-like value, got: ${typeof value}`);
+}
+
+/**
+ * Normalize orderId to bytes32 (0x + 64 hex chars).
+ * If already 0x + 64 hex, returns as-is; otherwise hashes with keccak256.
+ */
+function normalizeOrderIdToBytes32(orderId: string): string {
+  const trimmed = orderId.trim();
+  if (/^0x[0-9a-fA-F]{64}$/.test(trimmed)) return trimmed.toLowerCase();
+  return keccak256(toUtf8Bytes(trimmed));
 }
 
 /** Canonical address for native ETH in asset-based APIs (same as subgraph). */
@@ -928,6 +945,20 @@ export class AintiVirusEVM {
   }
 
   /**
+   * Check if gift card withdrawals are enabled for a pool (by asset + amount).
+   * Returns false if the mixer does not exist.
+   */
+  async isGiftCardWithdrawEnabledForPool(
+    asset: string,
+    amount: bigint,
+  ): Promise<boolean> {
+    const mixerAddress = await this.getMixer(asset, amount);
+    const zero = "0x0000000000000000000000000000000000000000";
+    if (!mixerAddress || mixerAddress.toLowerCase() === zero) return false;
+    return this.isGiftCardWithdrawEnabled(mixerAddress);
+  }
+
+  /**
    * Set payment contract (OPERATOR_ROLE).
    */
   async setPayment(paymentAddress: string): Promise<TransactionResult> {
@@ -998,7 +1029,7 @@ export class AintiVirusEVM {
 
   /**
    * Withdraw by gift card: factory pays order via payment contract (recipient from proof).
-   * @param orderId bytes32 order ID (0x-prefixed 64-char hex string).
+   * @param orderId Order ID: use 0x-prefixed 64-char hex for bytes32, or any string (will be keccak256-hashed to bytes32).
    */
   async withdrawByGiftCard(
     proof: WithdrawalProof,
@@ -1007,9 +1038,10 @@ export class AintiVirusEVM {
     assetAddress: string,
   ): Promise<TransactionResult> {
     if (!this.signer) throw new Error("Signer required for transactions");
+    const bytes32OrderId = normalizeOrderIdToBytes32(orderId);
     const tx = await this.factory.getFunction(
       "withdrawByGiftCard(tuple(uint256[2] pA, uint256[2][2] pB, uint256[2] pC, uint256[5] pubSignals),bytes32,uint256,address)",
-    )(proof, orderId, amount, assetAddress);
+    )(proof, bytes32OrderId, amount, assetAddress);
     const txHash =
       typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
     if (!txHash) throw new Error("Transaction hash missing");

@@ -12,8 +12,12 @@ interface DepositHook {
   deposit: (
     assetAddress: string,
     amount: bigint,
+    partnerAddress?: string,
   ) => Promise<{ txHash: string; depositData?: DepositData }>;
-  calculateDepositAmount?: (amount: bigint) => Promise<bigint>;
+  calculateDepositAmount?: (
+    amount: bigint,
+    partnerAddress?: string,
+  ) => Promise<bigint>;
   isReady?: boolean;
 }
 import { useChainId, useAccount } from "wagmi";
@@ -49,8 +53,12 @@ function depositDataToJson(d: DepositData, asset: string): string {
   );
 }
 
+type PartnerOption = "none" | "my" | "custom";
+
 export default function Deposit() {
   const [selectedPoolId, setSelectedPoolId] = useState<string>("");
+  const [partnerOption, setPartnerOption] = useState<PartnerOption>("none");
+  const [partnerCustomAddress, setPartnerCustomAddress] = useState("");
   const [pools, setPools] = useState<MixerPool[]>([]);
   const [poolsLoading, setPoolsLoading] = useState(true);
   const [poolsError, setPoolsError] = useState<string | null>(null);
@@ -64,7 +72,7 @@ export default function Deposit() {
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
   const chainId = useChainId();
-  const { isConnected } = useAccount();
+  const { isConnected, address: walletAddress } = useAccount();
   const { getEvmChainConfig, evmChainIds } = useMixerConfig();
   const evmChainConfig =
     chainId != null ? getEvmChainConfig(chainId) : undefined;
@@ -128,6 +136,18 @@ export default function Deposit() {
     [pools, selectedPoolId],
   );
 
+  /** Partner address to pass to deposit (zero address or valid 0x40 hex). */
+  const effectivePartnerAddress = useMemo((): string | undefined => {
+    if (partnerOption === "none") return undefined;
+    if (partnerOption === "my" && walletAddress) return walletAddress;
+    if (partnerOption === "custom") {
+      const a = partnerCustomAddress.trim();
+      if (/^0x[a-fA-F0-9]{40}$/.test(a)) return a;
+      return undefined;
+    }
+    return undefined;
+  }, [partnerOption, walletAddress, partnerCustomAddress]);
+
   const handleDeposit = async () => {
     if (!selectedPool) {
       alert("Select a mixer from the list.");
@@ -142,7 +162,11 @@ export default function Deposit() {
     setTotalWithFee(null);
     setLastDepositData(null);
     try {
-      const result = await deposit(selectedPool.asset, selectedPool.amount);
+      const result = await deposit(
+        selectedPool.asset,
+        selectedPool.amount,
+        effectivePartnerAddress,
+      );
       setTxHash(result.txHash);
       const data =
         (result as { depositData?: DepositData }).depositData ?? null;
@@ -151,7 +175,10 @@ export default function Deposit() {
         ? selectedPool.asset.toLowerCase() === wethAddress
         : false;
       if (isEth && calculateDepositAmount) {
-        const total = await calculateDepositAmount(selectedPool.amount);
+        const total = await calculateDepositAmount(
+          selectedPool.amount,
+          effectivePartnerAddress,
+        );
         setTotalWithFee(formatEther(total));
       } else {
         setTotalWithFee(null);
@@ -260,18 +287,80 @@ export default function Deposit() {
           )}
         </div>
 
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>
+            Partner (optional)
+          </label>
+          <p style={{ margin: "0 0 8px 0", fontSize: 12, color: "#64748b" }}>
+            Select a white-label partner to attribute the deposit; partner
+            receives an extra fee. Leave &quot;No partner&quot; for standard deposits.
+          </p>
+          <select
+            value={partnerOption}
+            onChange={(e) =>
+              setPartnerOption(e.target.value as PartnerOption)
+            }
+            disabled={isDepositing}
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              border: "1px solid #ccc",
+              borderRadius: 6,
+              fontSize: 13,
+              marginBottom: partnerOption === "custom" ? 8 : 0,
+            }}
+          >
+            <option value="none">No partner</option>
+            <option value="my" disabled={!walletAddress}>
+              My address{walletAddress ? ` (${formatAddress(walletAddress)})` : ""}
+            </option>
+            <option value="custom">Custom partner address</option>
+          </select>
+          {partnerOption === "custom" && (
+            <input
+              type="text"
+              value={partnerCustomAddress}
+              onChange={(e) => setPartnerCustomAddress(e.target.value)}
+              placeholder="0x..."
+              disabled={isDepositing}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "1px solid #ccc",
+                borderRadius: 6,
+                fontFamily: "monospace",
+                fontSize: 13,
+                marginTop: 8,
+              }}
+            />
+          )}
+        </div>
+
         <button
           type="button"
           onClick={handleDeposit}
-          disabled={isDepositing || !selectedPool}
+          disabled={
+            isDepositing ||
+            !selectedPool ||
+            (partnerOption === "custom" && effectivePartnerAddress === undefined)
+          }
           style={{
             width: "100%",
             padding: "10px 16px",
-            background: selectedPool ? "#2563eb" : "#94a3b8",
+            background:
+              selectedPool &&
+              !(partnerOption === "custom" && effectivePartnerAddress === undefined)
+                ? "#2563eb"
+                : "#94a3b8",
             color: "white",
             border: "none",
             borderRadius: 6,
-            cursor: selectedPool && !isDepositing ? "pointer" : "not-allowed",
+            cursor:
+              selectedPool &&
+              !isDepositing &&
+              !(partnerOption === "custom" && effectivePartnerAddress === undefined)
+                ? "pointer"
+                : "not-allowed",
           }}
         >
           {isDepositing ? "Depositing…" : "Deposit"}
