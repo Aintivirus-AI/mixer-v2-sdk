@@ -11,6 +11,17 @@ import { AintiVirusSolana } from "./solana";
 // Export types
 export * from "./types";
 
+// Export errors for programmatic handling
+export {
+  ERROR_CODES,
+  MixerSDKError,
+  SignerRequiredError,
+  TransactionError,
+  SubgraphError,
+  ProofError,
+  MulticallError,
+} from "./errors";
+
 // Export config and multi-chain factory
 export {
   normalizeConfig,
@@ -23,8 +34,9 @@ export type { NormalizedMixerConfig } from "./config";
 export { createMixerSDK } from "./createSDK";
 export type { MixerSDKInstance } from "./createSDK";
 
-// Export EVM SDK and constants
+// Export EVM SDK and constants (MULTICALL3_ADDRESS for per-chain config when needed)
 export { AintiVirusEVM, ETH_ADDRESS } from "./evm";
+export { MULTICALL3_ADDRESS } from "./evm/multicall";
 
 // Export Solana SDK (class only; hooks/provider Solana integration disabled)
 export { AintiVirusSolana } from "./solana";

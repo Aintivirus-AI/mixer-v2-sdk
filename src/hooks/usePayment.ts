@@ -5,8 +5,7 @@
  */
 
 import { useCallback } from "react";
-import { useAccount } from "wagmi";
-import { useMixer } from "./context";
+import { useEVMReady } from "./useEVMReady";
 import type { TransactionResult } from "../types";
 
 export interface PaymentRecord {
@@ -51,16 +50,7 @@ export interface UsePaymentReturn {
  * Payment hook. Must be used inside MixerProviderWithWagmi.
  */
 export function usePayment(): UsePaymentReturn {
-  const mixer = useMixer();
-  const { isConnected: evmConnected } = useAccount();
-
-  const evmSDK = mixer?.getActiveEVM?.() ?? null;
-  const chainId = mixer?.chainId;
-  const evmChainIds = mixer?.evmChainIds ?? [];
-  const isSupportedEVMChain =
-    chainId != null && evmChainIds.length > 0 && evmChainIds.includes(chainId);
-  const isEVMReady = !!evmSDK && evmConnected && isSupportedEVMChain;
-  const isReady = isEVMReady;
+  const { evmSDK, isEVMReady, isReady } = useEVMReady();
 
   const payWithRecipient = useCallback(
     async (

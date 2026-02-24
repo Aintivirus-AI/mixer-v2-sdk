@@ -8,8 +8,7 @@
 import { useCallback } from "react";
 import { AssetMode } from "../types";
 import type { TransactionResult, DepositData } from "../types";
-import { useAccount } from "wagmi";
-import { useMixer } from "./context";
+import { useEVMReady } from "./useEVMReady";
 import { generateSecretAndNullifier, computeCommitment } from "../utils/crypto";
 
 export interface DepositResult extends TransactionResult {
@@ -47,20 +46,10 @@ export interface UseDepositReturn {
  * EVM only: uses current chain from Provider.
  */
 export function useDeposit(/* options?: SolanaConnectionOptions */): UseDepositReturn {
-  const mixer = useMixer();
-  const { isConnected: evmConnected } = useAccount();
-
-  const evmSDK = mixer?.getActiveEVM?.() ?? null;
-  const chainId = mixer?.chainId;
-  const evmChainIds = mixer?.evmChainIds ?? [];
-  const isSupportedEVMChain =
-    chainId != null && evmChainIds.length > 0 && evmChainIds.includes(chainId);
-  const isEVMReady = !!evmSDK && evmConnected && isSupportedEVMChain;
+  const { evmSDK, isEVMReady, isReady } = useEVMReady();
 
   // Solana integration disabled
   const isSolanaReady = false;
-
-  const isReady = isEVMReady;
 
   const mixerExists = useCallback(
     async (assetAddress: string, amount: bigint): Promise<boolean> => {

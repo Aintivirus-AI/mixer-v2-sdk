@@ -13,7 +13,12 @@ import {
   EVMStakeSeason,
   EVMStakerRecord,
 } from "../types";
+import { SignerRequiredError, TransactionError } from "../errors";
 import { bigIntToBytes32 } from "../utils/crypto";
+import {
+  multicall as multicallAggregate,
+  MULTICALL3_ADDRESS,
+} from "./multicall";
 
 import factoryAbi from "./abis/AintiVirusFactory.json";
 import stakingAbi from "./abis/AintiVirusStaking.json";
@@ -73,6 +78,8 @@ export class AintiVirusEVM {
   private provider: Provider;
   private wethGateway: Contract | null = null;
   private wethAddress: string | null = null;
+  private readonly useMulticall: boolean;
+  private readonly multicallAddress: string;
 
   constructor(
     factoryAddress: string,
@@ -80,7 +87,11 @@ export class AintiVirusEVM {
     signerOrProvider: Signer | Provider,
     wethGatewayAddress?: string | null,
     wethAddress?: string | null,
+    useMulticall?: boolean,
+    multicallAddress?: string | null,
   ) {
+    this.useMulticall = useMulticall ?? false;
+    this.multicallAddress = multicallAddress ?? MULTICALL3_ADDRESS;
     // Treat as Signer if it has a non-null provider (ethers v6 or viem adapter)
     const isSigner =
       signerOrProvider &&
@@ -205,6 +216,71 @@ export class AintiVirusEVM {
     return await this.factory.mixers(asset, amount);
   }
 
+  /** Max calls per multicall batch to avoid RPC/network limits across different EVM chains. */
+  private static readonly MULTICALL_BATCH_SIZE = 100;
+
+  /**
+   * Get mixer addresses for multiple (asset, amount) pairs in one or few RPCs when useMulticall is enabled.
+   * Chunks requests by MULTICALL_BATCH_SIZE for networks with strict RPC limits. Uses chain-specific multicall address.
+   * Falls back to Promise.all of getMixer when useMulticall is false or multicall fails.
+   */
+  async getMixersBatch(
+    entries: Array<{ asset: string; amount: bigint }>,
+  ): Promise<string[]> {
+    if (entries.length === 0) return [];
+
+    const normalizeAsset = (a: string) =>
+      a.toLowerCase().startsWith("0x") ? a : a;
+
+    if (this.useMulticall) {
+      try {
+        const factoryAddress = await this.factory.getAddress();
+        const iface = this.factory.interface;
+        const zero = "0x0000000000000000000000000000000000000000";
+        const batchSize = AintiVirusEVM.MULTICALL_BATCH_SIZE;
+        const results: string[] = [];
+
+        for (let i = 0; i < entries.length; i += batchSize) {
+          const chunk = entries.slice(i, i + batchSize);
+          const calls = chunk.map(({ asset, amount }) => ({
+            target: factoryAddress,
+            callData: iface.encodeFunctionData("mixers", [
+              normalizeAsset(asset),
+              amount,
+            ]),
+          }));
+          const chunkResults = await multicallAggregate(
+            this.provider,
+            calls,
+            this.multicallAddress,
+          );
+          for (const r of chunkResults) {
+            if (!r.success) {
+              results.push(zero);
+              continue;
+            }
+            try {
+              const decoded = iface.decodeFunctionResult("mixers", r.returnData);
+              const addr = decoded?.[0] ?? decoded;
+              results.push(
+                typeof addr === "string" ? addr : String(addr),
+              );
+            } catch {
+              results.push(zero);
+            }
+          }
+        }
+        return results;
+      } catch {
+        // Fallback to single calls
+      }
+    }
+
+    return Promise.all(
+      entries.map((e) => this.getMixer(normalizeAsset(e.asset), e.amount)),
+    );
+  }
+
   /**
    * Check if mixer exists (asset address or AssetMode).
    */
@@ -230,9 +306,7 @@ export class AintiVirusEVM {
     commitment: bigint,
     partnerAddress: string = "0x0000000000000000000000000000000000000000",
   ): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const totalAmount = await this.calculateDepositAmount(
       amount,
@@ -256,16 +330,7 @@ export class AintiVirusEVM {
             )(amount, commitmentBytes32, partnerAddress, {
               value: totalAmount,
             });
-      const txHash =
-        typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-      if (!txHash) throw new Error("Transaction hash missing");
-      const receipt = await this.waitForTransactionReceipt(txHash);
-      return {
-        txHash: receipt.hash ?? txHash,
-        blockNumber: receipt.blockNumber,
-        blockTime: (await this.provider.getBlock(receipt.blockNumber))
-          ?.timestamp,
-      };
+      return this.sendAndWait(tx);
     }
 
     const factoryAddress = await this.factory.getAddress();
@@ -297,16 +362,7 @@ export class AintiVirusEVM {
       bigIntToBytes32(toBigint(commitment)),
       partnerAddress,
     );
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -348,23 +404,12 @@ export class AintiVirusEVM {
     amount: bigint,
     assetAddress: string,
   ): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.getFunction(
       "withdraw(tuple(uint256[2] pA, uint256[2][2] pB, uint256[2] pC, uint256[5] pubSignals),uint256,uint256,address)",
     )(proof, fee, amount, assetAddress);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -384,21 +429,10 @@ export class AintiVirusEVM {
    * Falls back to stakeToken (config token) if no gateway.
    */
   async stakeEther(amount: bigint): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
     if (this.wethGateway) {
       const tx = await this.wethGateway.stake({ value: amount });
-      const txHash =
-        typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-      if (!txHash) throw new Error("Transaction hash missing");
-      const receipt = await this.waitForTransactionReceipt(txHash);
-      return {
-        txHash: receipt.hash ?? txHash,
-        blockNumber: receipt.blockNumber,
-        blockTime: (await this.provider.getBlock(receipt.blockNumber))
-          ?.timestamp,
-      };
+      return this.sendAndWait(tx);
     }
     return this.stakeToken(amount);
   }
@@ -407,9 +441,7 @@ export class AintiVirusEVM {
    * Stake tokens
    */
   async stakeToken(amount: bigint): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const factoryAddress = await this.factory.getAddress();
     const allowance = await this.token.allowance(
@@ -422,110 +454,57 @@ export class AintiVirusEVM {
         typeof approveTx.hash === "string"
           ? approveTx.hash
           : (approveTx as { hash?: string }).hash;
-      if (approveHash) await this.waitForTransactionReceipt(approveHash);
+      if (approveHash) await this.sendAndWait(approveTx);
     }
 
     const tx = await this.factory.stake(this.token.target as string, amount);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
    * Claim ETH rewards (WETH asset)
    */
   async claimEth(seasonId: bigint): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
     const weth = await this.getWethAddress();
     if (!weth)
       throw new Error("WETH address not available (config or factory.weth())");
 
     const tx = await this.factory.claim(weth, seasonId);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
    * Claim token rewards
    */
   async claimToken(seasonId: bigint): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.claim(this.token.target as string, seasonId);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
    * Unstake ETH (WETH asset)
    */
   async unstakeEth(): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
     const weth = await this.getWethAddress();
     if (!weth)
       throw new Error("WETH address not available (config or factory.weth())");
 
     const tx = await this.factory.unstake(weth);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
    * Unstake tokens
    */
   async unstakeToken(): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.unstake(this.token.target as string);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -546,21 +525,10 @@ export class AintiVirusEVM {
    * Start a new stake season
    */
   async startStakeSeason(): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.startNewSeason();
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -568,21 +536,10 @@ export class AintiVirusEVM {
    * @param feeRate Fee rate in basis points (e.g., 250 for 0.25%)
    */
   async setFeeRate(feeRate: bigint): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.setFeeRate(feeRate);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -590,42 +547,20 @@ export class AintiVirusEVM {
    * @param duration Duration in seconds (e.g., 86400 for 1 day)
    */
   async updateNextSeasonDuration(duration: bigint): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.updateNextSeasonDuration(duration);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
    * Set fee collector that receives the fee collector share of deposit fees (requires DEFAULT_ADMIN_ROLE)
    */
   async setFeeCollector(feeCollector: string): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.setFeeCollector(feeCollector);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -633,21 +568,10 @@ export class AintiVirusEVM {
    * @param bps Share in basis points (e.g., 5000 = 50%), max 10000
    */
   async setRewardPoolShareBps(bps: bigint): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.setRewardPoolShareBps(bps);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -657,21 +581,10 @@ export class AintiVirusEVM {
     partner: string,
     extraFee: bigint,
   ): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.addPartner(partner, extraFee);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -681,63 +594,30 @@ export class AintiVirusEVM {
     partner: string,
     extraFee: bigint,
   ): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.setPartnerExtraFee(partner, extraFee);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
    * Allow a registered partner to set their own extra fee (caller must be a registered partner)
    */
   async setMyExtraFee(extraFee: bigint): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.setMyExtraFee(extraFee);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
    * Remove a partner (requires OPERATOR_ROLE)
    */
   async removePartner(partner: string): Promise<TransactionResult> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
 
     const tx = await this.factory.removePartner(partner);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -784,38 +664,25 @@ export class AintiVirusEVM {
     buyer: string,
     amount: bigint,
   ): Promise<TransactionResult> {
-    if (!this.signer) throw new Error("Signer required for transactions");
+    this.assertSigner();
     const paymentAddr = await this.getPaymentAddress();
     if (!paymentAddr || paymentAddr === "0x0000000000000000000000000000000000000000") {
       throw new Error("Payment contract not set on factory");
     }
     const payment = await this.getPaymentContract();
     if (!payment) throw new Error("Payment contract not set on factory");
-    try {
-      const signerAddr = await (this.signer as { getAddress?: () => Promise<string> }).getAddress?.();
-      const tokenContractWithSigner = new Contract(token, ERC20_ABI, this.signer);
-      if (signerAddr) {
-        const allowanceRaw = await tokenContractWithSigner.allowance(signerAddr, paymentAddr).catch(() => null);
-        const allowance = allowanceRaw != null ? toBigint(allowanceRaw) : null;
-        if (allowance != null && amount > allowance) {
-          const approveTx = await tokenContractWithSigner.approve(paymentAddr, amount);
-          const approveHash = typeof approveTx.hash === "string" ? approveTx.hash : (approveTx as { hash?: string }).hash;
-          if (approveHash) await this.waitForTransactionReceipt(approveHash);
-        }
+    const signerAddr = await (this.signer as { getAddress?: () => Promise<string> }).getAddress?.();
+    const tokenContractWithSigner = new Contract(token, ERC20_ABI, this.signer);
+    if (signerAddr) {
+      const allowanceRaw = await tokenContractWithSigner.allowance(signerAddr, paymentAddr).catch(() => null);
+      const allowance = allowanceRaw != null ? toBigint(allowanceRaw) : null;
+      if (allowance != null && amount > allowance) {
+        const approveTx = await tokenContractWithSigner.approve(paymentAddr, amount);
+        await this.sendAndWait(approveTx);
       }
-      const tx = await payment.payWithRecipient(orderId, token, buyer, amount);
-      const txHash =
-        typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-      if (!txHash) throw new Error("Transaction hash missing");
-      const receipt = await this.waitForTransactionReceipt(txHash);
-      return {
-        txHash: receipt.hash ?? txHash,
-        blockNumber: receipt.blockNumber,
-        blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-      };
-    } catch (err: unknown) {
-      throw err;
     }
+    const tx = await payment.payWithRecipient(orderId, token, buyer, amount);
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -827,7 +694,7 @@ export class AintiVirusEVM {
     buyer: string,
     amountWei: bigint,
   ): Promise<TransactionResult> {
-    if (!this.signer) throw new Error("Signer required for transactions");
+    this.assertSigner();
     if (!this.wethGateway) throw new Error("WETH Gateway not configured for this chain");
     if (amountWei <= 0n) throw new Error("Amount must be positive");
     const wethAddr = await this.getWethAddress();
@@ -835,15 +702,7 @@ export class AintiVirusEVM {
     const tx = await this.wethGateway.payWithRecipient(orderId, wethAddr, buyer, {
       value: amountWei,
     });
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -922,19 +781,11 @@ export class AintiVirusEVM {
    * Add or remove a token from the allowed list (DEFAULT_ADMIN_ROLE on payment contract).
    */
   async updateAllowedToken(token: string, allowed: boolean): Promise<TransactionResult> {
-    if (!this.signer) throw new Error("Signer required for transactions");
+    this.assertSigner();
     const payment = await this.getPaymentContract();
     if (!payment) throw new Error("Payment contract not set on factory");
     const tx = await payment.updateAllowedToken(token, allowed);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -962,17 +813,9 @@ export class AintiVirusEVM {
    * Set payment contract (OPERATOR_ROLE).
    */
   async setPayment(paymentAddress: string): Promise<TransactionResult> {
-    if (!this.signer) throw new Error("Signer required for transactions");
+    this.assertSigner();
     const tx = await this.factory.setPayment(paymentAddress);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -983,21 +826,13 @@ export class AintiVirusEVM {
     amount: bigint,
     enabled: boolean,
   ): Promise<TransactionResult> {
-    if (!this.signer) throw new Error("Signer required for transactions");
+    this.assertSigner();
     const tx = await this.factory.setMixerGiftCardEnabled(
       asset,
       amount,
       enabled,
     );
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -1008,7 +843,7 @@ export class AintiVirusEVM {
     amounts: bigint[],
     enabled: boolean,
   ): Promise<TransactionResult> {
-    if (!this.signer) throw new Error("Signer required for transactions");
+    this.assertSigner();
     if (assets.length !== amounts.length)
       throw new Error("assets and amounts length mismatch");
     const tx = await this.factory.batchSetMixerGiftCardEnabled(
@@ -1016,15 +851,7 @@ export class AintiVirusEVM {
       amounts,
       enabled,
     );
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -1037,20 +864,12 @@ export class AintiVirusEVM {
     amount: bigint,
     assetAddress: string,
   ): Promise<TransactionResult> {
-    if (!this.signer) throw new Error("Signer required for transactions");
+    this.assertSigner();
     const bytes32OrderId = normalizeOrderIdToBytes32(orderId);
     const tx = await this.factory.getFunction(
       "withdrawByGiftCard(tuple(uint256[2] pA, uint256[2][2] pB, uint256[2] pC, uint256[5] pubSignals),bytes32,uint256,address)",
     )(proof, bytes32OrderId, amount, assetAddress);
-    const txHash =
-      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
-    const receipt = await this.waitForTransactionReceipt(txHash);
-    return {
-      txHash: receipt.hash ?? txHash,
-      blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
-    };
+    return this.sendAndWait(tx);
   }
 
   /**
@@ -1217,24 +1036,62 @@ export class AintiVirusEVM {
     assetAddress: string,
     amount: bigint,
   ): Promise<TransactionResult & { mixerAddress: string }> {
-    if (!this.signer) {
-      throw new Error("Signer required for transactions");
-    }
+    this.assertSigner();
     const asset = assetAddress.toLowerCase().startsWith("0x")
       ? assetAddress
       : assetAddress;
     const tx = await this.factory.deployMixer(asset, amount);
     const txHash =
       typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
-    if (!txHash) throw new Error("Transaction hash missing");
+    if (!txHash) throw new TransactionError("Transaction hash missing");
     const receipt = await this.waitForTransactionReceipt(txHash);
     const mixerAddress = this.parseMixerDeployedFromReceipt(receipt);
+    const blockTime = (
+      await this.provider.getBlock(receipt.blockNumber)
+    )?.timestamp;
     return {
       txHash: receipt.hash ?? txHash,
       blockNumber: receipt.blockNumber,
-      blockTime: (await this.provider.getBlock(receipt.blockNumber))?.timestamp,
+      blockTime:
+        typeof blockTime === "bigint" ? Number(blockTime) : blockTime,
       mixerAddress: mixerAddress ?? "",
     };
+  }
+
+  /** Throws SignerRequiredError if no signer (for write methods). */
+  private assertSigner(): void {
+    if (!this.signer) throw new SignerRequiredError();
+  }
+
+  /**
+   * Send tx, wait for receipt, return normalized TransactionResult.
+   * Throws TransactionError if hash missing or receipt timeout.
+   */
+  private async sendAndWait(tx: { hash?: string }): Promise<TransactionResult> {
+    const txHash =
+      typeof tx.hash === "string" ? tx.hash : (tx as { hash?: string }).hash;
+    if (!txHash) {
+      throw new TransactionError("Transaction hash missing");
+    }
+    try {
+      const receipt = await this.waitForTransactionReceipt(txHash);
+      const blockTime = (
+        await this.provider.getBlock(receipt.blockNumber)
+      )?.timestamp;
+      return {
+        txHash: receipt.hash ?? txHash,
+        blockNumber: receipt.blockNumber,
+        blockTime:
+          typeof blockTime === "bigint" ? Number(blockTime) : blockTime,
+      };
+    } catch (err) {
+      throw err instanceof TransactionError
+        ? err
+        : new TransactionError(
+            err instanceof Error ? err.message : String(err),
+            err
+          );
+    }
   }
 
   /**
@@ -1274,7 +1131,7 @@ export class AintiVirusEVM {
         // Receipt not found yet (e.g. viem TransactionReceiptNotFoundError)
       }
       if (Date.now() - start >= maxWaitMs) {
-        throw new Error(
+        throw new TransactionError(
           `Transaction receipt for ${hash} not found after ${maxWaitMs}ms. The transaction may still succeed; check the block explorer.`,
         );
       }

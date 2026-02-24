@@ -108,7 +108,8 @@ export type StakeSeason = SolanaStakeSeason | EVMStakeSeason;
 export type StakerRecord = SolanaStakerRecord | EVMStakerRecord;
 
 /**
- * Per-chain EVM config (one entry per chainId in MixerSDKConfig.chains.evm)
+ * Per-chain EVM config (one entry per chainId in MixerSDKConfig.chains.evm).
+ * Optimized for many EVM networks: each chain can override multicall and RPC/subgraph independently.
  */
 export interface EvmChainConfig {
   factoryAddress: string;
@@ -121,6 +122,16 @@ export interface EvmChainConfig {
   subgraphUrl?: string;
   /** Payment contract address (for subgraph payment stats / payment processed list) */
   paymentAddress?: string;
+  /**
+   * Multicall3 contract address for this chain. Omit to use the standard Multicall3 address.
+   * Set when the chain uses a different multicall contract or address.
+   */
+  multicallAddress?: string;
+  /**
+   * Enable batch reads via multicall for this chain. Overrides global useMulticall when set.
+   * Omit to use global config.useMulticall.
+   */
+  useMulticall?: boolean;
 }
 
 /**

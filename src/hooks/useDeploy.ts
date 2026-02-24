@@ -5,8 +5,7 @@
  */
 
 import { useCallback } from "react";
-import { useAccount } from "wagmi";
-import { useMixer } from "./context";
+import { useEVMReady } from "./useEVMReady";
 
 // export type { SolanaConnectionOptions }; // Reserved for future Solana support
 
@@ -28,21 +27,10 @@ export interface UseDeployReturn {
  * EVM only: uses current chain from Provider (must be a supported chain ID).
  */
 export function useDeploy(/* options?: SolanaConnectionOptions */): UseDeployReturn {
-  const mixer = useMixer();
-  const { isConnected: evmConnected } = useAccount();
-
-  const evmSDK = mixer?.getActiveEVM?.() ?? null;
-  const chainId = mixer?.chainId;
-  const evmChainIds = mixer?.evmChainIds ?? [];
-  const isSupportedEVMChain =
-    chainId != null && evmChainIds.length > 0 && evmChainIds.includes(chainId);
-  const isEVMReady = !!evmSDK && evmConnected && isSupportedEVMChain;
+  const { evmSDK, isEVMReady, isReady } = useEVMReady();
 
   // Solana integration disabled – no solanaWallet/solanaConnection passed
-  // const solanaSDK = useMemo(() => { ... }, [options, ...]);
   const isSolanaReady = false;
-
-  const isReady = isEVMReady; // was: Boolean(isEVMReady || isSolanaReady)
 
   const deployMixer = useCallback(
     async (

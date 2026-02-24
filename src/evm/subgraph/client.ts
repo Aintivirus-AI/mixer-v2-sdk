@@ -1,4 +1,5 @@
 import type { AssetMode } from "../../types";
+import { SubgraphError } from "../../errors";
 import { QUERIES } from "./queries";
 import {
   type ClaimedEntity,
@@ -47,12 +48,16 @@ export class AintiVirusEVMSubgraph {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`Subgraph HTTP ${res.status}: ${text || res.statusText}`);
+      throw new SubgraphError(
+        `Subgraph HTTP ${res.status}: ${text || res.statusText}`,
+        { status: res.status }
+      );
     }
 
     const json = (await res.json()) as any;
     if (json.errors?.length) {
-      throw new Error(`Subgraph error: ${json.errors[0]?.message ?? "Unknown"}`);
+      const msg = json.errors[0]?.message ?? "Unknown";
+      throw new SubgraphError(`Subgraph error: ${msg}`);
     }
     return json.data as TData;
   }

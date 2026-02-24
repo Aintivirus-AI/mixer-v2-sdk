@@ -151,6 +151,11 @@
       "name": "NoRewards",
       "type": "error"
     },
+  {
+    "inputs": [],
+    "name": "RewardsAlreadyRecovered",
+    "type": "error"
+  },
     {
       "inputs": [],
       "name": "PaymentContractMissing",
@@ -601,7 +606,7 @@
           "type": "uint256"
         }
       ],
-      "name": "UnclaimedRewardsClaimed",
+    "name": "UnclaimedRewardsRecovered",
       "type": "event"
     },
     {
@@ -776,7 +781,7 @@
           "type": "uint256"
         }
       ],
-      "name": "claimUnclaimedRewards",
+    "name": "recoverUnclaimedRewards",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"

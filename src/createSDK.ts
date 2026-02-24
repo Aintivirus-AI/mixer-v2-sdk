@@ -15,6 +15,7 @@ import {
 } from "./config";
 import type { NormalizedMixerConfig } from "./config";
 import { AintiVirusEVM } from "./evm";
+import { MULTICALL3_ADDRESS } from "./evm/multicall";
 import type { AintiVirusSolana } from "./solana";
 
 export type { NormalizedMixerConfig } from "./config";
@@ -56,12 +57,18 @@ export function createMixerSDK(config: MixerSDKConfig | SDKConfig): MixerSDKInst
       if (!chainConfig) return null;
       const tokenAddress = chainConfig.tokenAddress ?? "0x0000000000000000000000000000000000000000";
       try {
+        const useMulticall =
+          chainConfig.useMulticall ?? normalized.useMulticall ?? false;
+        const multicallAddress =
+          chainConfig.multicallAddress ?? MULTICALL3_ADDRESS;
         return new AintiVirusEVM(
           chainConfig.factoryAddress,
           tokenAddress,
           signerOrProvider,
           chainConfig.wethGatewayAddress,
           chainConfig.wethAddress,
+          useMulticall,
+          multicallAddress,
         );
       } catch {
         return null;

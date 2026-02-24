@@ -69,6 +69,7 @@ export function normalizeConfig(config: SDKConfig | MixerSDKConfig): NormalizedM
 /**
  * Get EVM chain config for the given chainId.
  * For legacy single-chain config, returns the single evm config for any chainId.
+ * Optimized for many EVM networks: each chainId is looked up in config.chains.evm.
  */
 export function getEvmChainConfig(
   config: SDKConfig | MixerSDKConfig | NormalizedMixerConfig,

@@ -1,6 +1,7 @@
 import { poseidon2 } from "poseidon-lite";
 import MerkleTree from "fixed-merkle-tree";
 import { WithdrawalProof } from "../types";
+import { ProofError } from "../errors";
 import {
   computeCommitment,
   computeNullifierHash,
@@ -13,9 +14,17 @@ import { config } from "./circuit";
 async function loadCircuitValue(value: string): Promise<Buffer> {
   const trimmed = value.trim();
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    const res = await fetch(trimmed);
-    if (!res.ok) throw new Error(`Failed to fetch circuit: ${res.statusText}`);
-    return Buffer.from(await res.arrayBuffer());
+    try {
+      const res = await fetch(trimmed);
+      if (!res.ok) {
+        throw new ProofError(`Failed to fetch circuit: ${res.statusText}`);
+      }
+      return Buffer.from(await res.arrayBuffer());
+    } catch (err) {
+      throw err instanceof ProofError
+        ? err
+        : new ProofError(`Failed to fetch circuit: ${String(err)}`, err);
+    }
   }
   return Buffer.from(trimmed, "base64");
 }
@@ -47,7 +56,7 @@ export function getMerklePath(
 ): { pathElements: bigint[]; pathIndices: number[] } {
   const commitmentIndex = tree.elements.indexOf(commitment.toString());
   if (commitmentIndex === -1) {
-    throw new Error("Commitment not found in merkle tree");
+    throw new ProofError("Commitment not found in merkle tree");
   }
 
   const path = tree.path(commitmentIndex);
@@ -85,18 +94,9 @@ export async function generateWithdrawalProof(
     circuitZkey = await loadCircuitValue(zkeyVal);
   }
   if (!circuitWasm || !circuitZkey) {
-    console.warn(
-      "Circuit files not provided. Returning placeholder proof structure.",
+    throw new ProofError(
+      "Circuit files not provided. Set circuitWasm and circuitZkey in config."
     );
-    return {
-      pA: [0n, 0n],
-      pB: [
-        [0n, 0n],
-        [0n, 0n],
-      ],
-      pC: [0n, 0n],
-      pubSignals: [nullifierHash, recipientBigInt, root, fee, relayerBigInt],
-    };
   }
 
   const input = {
@@ -131,16 +131,10 @@ export async function generateWithdrawalProof(
       ],
     };
   } catch (error) {
-    console.error("Proof generation failed:", error);
-    return {
-      pA: [0n, 0n],
-      pB: [
-        [0n, 0n],
-        [0n, 0n],
-      ],
-      pC: [0n, 0n],
-      pubSignals: [nullifierHash, recipientBigInt, root, fee, relayerBigInt],
-    };
+    throw new ProofError(
+      "Proof generation failed",
+      error instanceof Error ? error : new Error(String(error))
+    );
   }
 }
 
