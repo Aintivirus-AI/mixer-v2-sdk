@@ -425,86 +425,137 @@ export class AintiVirusEVM {
   }
 
   /**
-   * Stake native ETH via WETHGateway. Requires wethGatewayAddress in config.
-   * Falls back to stakeToken (config token) if no gateway.
+   * Stake any asset deployed as a mixer pool.
+   * For WETH with gateway configured: uses native ETH (msg.value).
+   * For ERC20: approves factory and calls factory.stake(asset, amount).
+   * @param assetAddress Asset address (WETH or any ERC20 deployed as mixer)
+   * @param amount Amount in asset's smallest unit
    */
-  async stakeEther(amount: bigint): Promise<TransactionResult> {
+  async stake(assetAddress: string, amount: bigint): Promise<TransactionResult> {
     this.assertSigner();
-    if (this.wethGateway) {
-      const tx = await this.wethGateway.stake({ value: amount });
+    const asset = assetAddress.toLowerCase().startsWith("0x")
+      ? assetAddress
+      : assetAddress;
+
+    const gateway = this.wethGateway;
+    const isWeth = gateway && (await this.isWethAsset(asset));
+    if (isWeth && gateway) {
+      const tx = await gateway.stake({ value: amount });
       return this.sendAndWait(tx);
     }
-    return this.stakeToken(amount);
-  }
-
-  /**
-   * Stake tokens
-   */
-  async stakeToken(amount: bigint): Promise<TransactionResult> {
-    this.assertSigner();
 
     const factoryAddress = await this.factory.getAddress();
-    const allowance = await this.token.allowance(
+    const assetContract =
+      asset.toLowerCase() === (this.token.target as string).toLowerCase()
+        ? this.token
+        : new Contract(asset, ERC20_ABI, this.signer);
+
+    const allowanceRaw = await assetContract.allowance(
       await this.signer.getAddress(),
       factoryAddress,
     );
+    const allowance = toBigint(allowanceRaw);
     if (allowance < amount) {
-      const approveTx = await this.token.approve(factoryAddress, amount);
+      const approveTx = await assetContract.approve(
+        factoryAddress,
+        amount,
+      );
       const approveHash =
         typeof approveTx.hash === "string"
           ? approveTx.hash
           : (approveTx as { hash?: string }).hash;
-      if (approveHash) await this.sendAndWait(approveTx);
+      if (approveHash) await this.waitForTransactionReceipt(approveHash);
     }
 
-    const tx = await this.factory.stake(this.token.target as string, amount);
+    const tx = await this.factory.stake(asset, amount);
     return this.sendAndWait(tx);
   }
 
   /**
-   * Claim ETH rewards (WETH asset)
+   * Unstake any asset.
+   * @param assetAddress Asset address (WETH or any ERC20 deployed as mixer)
+   */
+  async unstake(assetAddress: string): Promise<TransactionResult> {
+    this.assertSigner();
+    const asset = assetAddress.toLowerCase().startsWith("0x")
+      ? assetAddress
+      : assetAddress;
+    const tx = await this.factory.unstake(asset);
+    return this.sendAndWait(tx);
+  }
+
+  /**
+   * Claim rewards for any asset and season.
+   * @param assetAddress Asset address (WETH or any ERC20 deployed as mixer)
+   * @param seasonId Season ID to claim
+   */
+  async claim(
+    assetAddress: string,
+    seasonId: bigint,
+  ): Promise<TransactionResult> {
+    this.assertSigner();
+    const asset = assetAddress.toLowerCase().startsWith("0x")
+      ? assetAddress
+      : assetAddress;
+    const tx = await this.factory.claim(asset, seasonId);
+    return this.sendAndWait(tx);
+  }
+
+  /**
+   * Stake native ETH via WETHGateway. Requires wethGatewayAddress in config.
+   * Falls back to stake(config token) if no gateway.
+   * @deprecated Use stake(wethAddress, amount) instead.
+   */
+  async stakeEther(amount: bigint): Promise<TransactionResult> {
+    const weth = await this.getWethAddress();
+    if (weth) return this.stake(weth, amount);
+    return this.stake(this.token.target as string, amount);
+  }
+
+  /**
+   * Stake config token.
+   * @deprecated Use stake(tokenAddress, amount) instead.
+   */
+  async stakeToken(amount: bigint): Promise<TransactionResult> {
+    return this.stake(this.token.target as string, amount);
+  }
+
+  /**
+   * Claim ETH rewards (WETH asset).
+   * @deprecated Use claim(wethAddress, seasonId) instead.
    */
   async claimEth(seasonId: bigint): Promise<TransactionResult> {
-    this.assertSigner();
     const weth = await this.getWethAddress();
     if (!weth)
       throw new Error("WETH address not available (config or factory.weth())");
-
-    const tx = await this.factory.claim(weth, seasonId);
-    return this.sendAndWait(tx);
+    return this.claim(weth, seasonId);
   }
 
   /**
-   * Claim token rewards
+   * Claim config token rewards.
+   * @deprecated Use claim(tokenAddress, seasonId) instead.
    */
   async claimToken(seasonId: bigint): Promise<TransactionResult> {
-    this.assertSigner();
-
-    const tx = await this.factory.claim(this.token.target as string, seasonId);
-    return this.sendAndWait(tx);
+    return this.claim(this.token.target as string, seasonId);
   }
 
   /**
-   * Unstake ETH (WETH asset)
+   * Unstake ETH (WETH asset).
+   * @deprecated Use unstake(wethAddress) instead.
    */
   async unstakeEth(): Promise<TransactionResult> {
-    this.assertSigner();
     const weth = await this.getWethAddress();
     if (!weth)
       throw new Error("WETH address not available (config or factory.weth())");
-
-    const tx = await this.factory.unstake(weth);
-    return this.sendAndWait(tx);
+    return this.unstake(weth);
   }
 
   /**
-   * Unstake tokens
+   * Unstake config token.
+   * @deprecated Use unstake(tokenAddress) instead.
    */
   async unstakeToken(): Promise<TransactionResult> {
-    this.assertSigner();
-
-    const tx = await this.factory.unstake(this.token.target as string);
-    return this.sendAndWait(tx);
+    return this.unstake(this.token.target as string);
   }
 
   /**
@@ -963,31 +1014,114 @@ export class AintiVirusEVM {
   }
 
   /**
-   * Check if user has claimed rewards for a season
+   * Check if user has claimed rewards for a season and asset.
+   * @param address Staker address
+   * @param seasonId Season ID
+   * @param assetAddress Asset address (WETH or any ERC20 deployed as mixer)
    */
-  async hasClaimedEth(address: string, seasonId: bigint): Promise<boolean> {
+  async hasClaimed(
+    address: string,
+    seasonId: bigint,
+    assetAddress: string,
+  ): Promise<boolean> {
     const stakingAddress = await this.getStakingAddress();
     const staking = new Contract(
       stakingAddress,
       STAKING_ABI,
       this.provider,
     );
-    const weth = await this.getWethAddress();
-    const ethAsset = weth ?? (this.token.target as string);
-    return await staking.wasSeasonClaimed(address, seasonId, ethAsset);
+    const asset = assetAddress.toLowerCase().startsWith("0x")
+      ? assetAddress
+      : assetAddress;
+    return await staking.wasSeasonClaimed(address, seasonId, asset);
   }
 
   /**
-   * Check if user has claimed token rewards for a season
+   * Get staker record for a specific asset.
+   * @param address Staker address
+   * @param assetAddress Asset address (WETH or any ERC20 deployed as mixer)
    */
-  async hasClaimedToken(address: string, seasonId: bigint): Promise<boolean> {
+  async getStakerRecordForAsset(
+    address: string,
+    assetAddress: string,
+  ): Promise<{
+    seasonId: bigint;
+    stakedAt: bigint;
+    staked: bigint;
+    weight: bigint;
+  }> {
     const stakingAddress = await this.getStakingAddress();
     const staking = new Contract(
       stakingAddress,
       STAKING_ABI,
       this.provider,
     );
-    return await staking.wasSeasonClaimed(
+    const asset = assetAddress.toLowerCase().startsWith("0x")
+      ? assetAddress
+      : assetAddress;
+    const r = await staking.records(address, asset);
+    return {
+      seasonId: BigInt(r.seasonId.toString()),
+      stakedAt: BigInt(r.stakedAt.toString()),
+      staked: BigInt(r.staked.toString()),
+      weight: BigInt(r.weight.toString()),
+    };
+  }
+
+  /**
+   * Get stake season totals for a specific asset.
+   * @param seasonId Season ID
+   * @param assetAddress Asset address (WETH or any ERC20 deployed as mixer)
+   */
+  async getStakeSeasonForAsset(
+    seasonId: bigint,
+    assetAddress: string,
+  ): Promise<{
+    seasonId: bigint;
+    start: bigint;
+    end: bigint;
+    duration: bigint;
+    totalStaked: bigint;
+    totalReward: bigint;
+    totalWeight: bigint;
+  }> {
+    const stakingAddress = await this.getStakingAddress();
+    const staking = new Contract(
+      stakingAddress,
+      STAKING_ABI,
+      this.provider,
+    );
+    const asset = assetAddress.toLowerCase().startsWith("0x")
+      ? assetAddress
+      : assetAddress;
+    const s = await staking.seasonAndTotals(seasonId, asset);
+    return {
+      seasonId: BigInt(s.seasonId.toString()),
+      start: BigInt(s.start.toString()),
+      end: BigInt(s.end.toString()),
+      duration: BigInt(s.duration.toString()),
+      totalStaked: BigInt(s.totalStaked.toString()),
+      totalReward: BigInt(s.totalReward.toString()),
+      totalWeight: BigInt(s.totalWeight.toString()),
+    };
+  }
+
+  /**
+   * Check if user has claimed ETH rewards for a season.
+   * @deprecated Use hasClaimed(address, seasonId, wethAddress) instead.
+   */
+  async hasClaimedEth(address: string, seasonId: bigint): Promise<boolean> {
+    const weth = await this.getWethAddress();
+    const ethAsset = weth ?? (this.token.target as string);
+    return this.hasClaimed(address, seasonId, ethAsset);
+  }
+
+  /**
+   * Check if user has claimed token rewards for a season.
+   * @deprecated Use hasClaimed(address, seasonId, tokenAddress) instead.
+   */
+  async hasClaimedToken(address: string, seasonId: bigint): Promise<boolean> {
+    return this.hasClaimed(
       address,
       seasonId,
       this.token.target as string,
