@@ -1,6 +1,6 @@
 {
   "name": "@aintivirus-ai/mixer-sdk",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "TypeScript SDK for AintiVirus Mixer - Easy web3 integration for privacy-preserving transactions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
