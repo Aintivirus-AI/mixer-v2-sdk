@@ -1,11 +1,22 @@
-import { useState, useCallback } from "react";
-import { useMixerConfig, useMixer } from "@aintivirus-ai/mixer-sdk";
-import type { EVMStakeSeason, EVMStakerRecord } from "@aintivirus-ai/mixer-sdk";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import {
+  useMixerConfig,
+  useMixer,
+  AintiVirusEVMSubgraph,
+} from "@aintivirus-ai/mixer-sdk";
+import type {
+  EVMStakeSeason,
+  EVMStakerRecord,
+  ProtocolState,
+  SeasonEntity,
+  SeasonSummary,
+  SeasonWithParticipants,
+  StakerSeasonParticipant,
+} from "@aintivirus-ai/mixer-sdk";
 import { formatEther, parseEther, parseUnits } from "ethers";
 import { useChainId, useAccount } from "wagmi";
 
-const EXPLORER_TX = (hash: string) =>
-  `https://sepolia.etherscan.io/tx/${hash}`;
+const EXPLORER_TX = (hash: string) => `https://sepolia.etherscan.io/tx/${hash}`;
 
 function formatBigInt(v: bigint): string {
   return v.toString();
@@ -29,7 +40,12 @@ const inputStyle = {
   fontSize: 13,
 };
 
-const labelStyle = { display: "block" as const, fontSize: 14, marginBottom: 8, color: "#ccc" };
+const labelStyle = {
+  display: "block" as const,
+  fontSize: 14,
+  marginBottom: 8,
+  color: "#ccc",
+};
 const buttonStyle = {
   padding: "10px 16px",
   background: "#4361ee",
@@ -47,7 +63,9 @@ export default function Stake() {
   const [stakerAddressInput, setStakerAddressInput] = useState("");
   const [currentSeason, setCurrentSeason] = useState<bigint | null>(null);
   const [seasonInfo, setSeasonInfo] = useState<EVMStakeSeason | null>(null);
-  const [stakerRecord, setStakerRecord] = useState<EVMStakerRecord | null>(null);
+  const [stakerRecord, setStakerRecord] = useState<EVMStakerRecord | null>(
+    null,
+  );
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
   const [isStakingEth, setIsStakingEth] = useState(false);
   const [isStakingToken, setIsStakingToken] = useState(false);
@@ -59,15 +77,33 @@ export default function Stake() {
   const [isLoadingRecord, setIsLoadingRecord] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Subgraph data for staking stats
+  const [protocolStats, setProtocolStats] = useState<ProtocolState | null>(
+    null,
+  );
+  const [currentSeasonSubgraph, setCurrentSeasonSubgraph] =
+    useState<SeasonEntity | null>(null);
+  const [allSeasons, setAllSeasons] = useState<SeasonSummary[]>([]);
+  const [seasonParticipants, setSeasonParticipants] =
+    useState<SeasonWithParticipants | null>(null);
+  const [subgraphLoading, setSubgraphLoading] = useState(false);
+  const [subgraphError, setSubgraphError] = useState<string | null>(null);
+
   const chainId = useChainId();
   const { isConnected, address: walletAddress } = useAccount();
   const { getEvmChainConfig, evmChainIds } = useMixerConfig();
   const evmChainConfig =
     chainId != null ? getEvmChainConfig(chainId) : undefined;
+  const subgraphUrl = evmChainConfig?.subgraphUrl;
+  const subgraph = useMemo(() => {
+    if (!subgraphUrl) return null;
+    return new AintiVirusEVMSubgraph({ endpoint: subgraphUrl });
+  }, [subgraphUrl]);
   const tokenAddress = (evmChainConfig as { tokenAddress?: string } | undefined)
     ?.tokenAddress;
-  const wethGateway = (evmChainConfig as { wethGatewayAddress?: string } | undefined)
-    ?.wethGatewayAddress;
+  const wethGateway = (
+    evmChainConfig as { wethGatewayAddress?: string } | undefined
+  )?.wethGatewayAddress;
 
   const mixer = useMixer();
   const evmSDK = mixer?.getActiveEVM?.() ?? null;
@@ -79,7 +115,98 @@ export default function Stake() {
     evmChainIds.length > 0 &&
     !evmChainIds.includes(chainId);
 
-  const effectiveStakerAddress = stakerAddressInput.trim() || (walletAddress ?? "");
+  const effectiveStakerAddress =
+    stakerAddressInput.trim() || (walletAddress ?? "");
+
+  const refreshSubgraphData = useCallback(async () => {
+    if (!subgraph) return;
+    setSubgraphLoading(true);
+    setSubgraphError(null);
+    try {
+      const [protocol, seasons] = await Promise.all([
+        subgraph.getProtocolLifetimeStats(),
+        subgraph.getAllSeasons(),
+      ]);
+      setProtocolStats(protocol ?? null);
+      setAllSeasons(seasons ?? []);
+
+      if (protocol?.currentSeasonId != null) {
+        const [season, withParticipants] = await Promise.all([
+          subgraph.getSeason(protocol.currentSeasonId),
+          subgraph.getSeasonWithParticipants(protocol.currentSeasonId),
+        ]);
+        setCurrentSeasonSubgraph(season ?? null);
+        setSeasonParticipants(withParticipants ?? null);
+      } else {
+        setCurrentSeasonSubgraph(null);
+        setSeasonParticipants(null);
+      }
+    } catch (e) {
+      setSubgraphError(e instanceof Error ? e.message : "Subgraph failed");
+      setProtocolStats(null);
+      setCurrentSeasonSubgraph(null);
+      setAllSeasons([]);
+      setSeasonParticipants(null);
+    } finally {
+      setSubgraphLoading(false);
+    }
+  }, [subgraph]);
+
+  // Load subgraph data when subgraph is available
+  useEffect(() => {
+    if (!subgraph) {
+      setProtocolStats(null);
+      setCurrentSeasonSubgraph(null);
+      setAllSeasons([]);
+      setSeasonParticipants(null);
+      setSubgraphLoading(false);
+      setSubgraphError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setSubgraphLoading(true);
+    setSubgraphError(null);
+
+    (async () => {
+      try {
+        const [protocol, seasons] = await Promise.all([
+          subgraph.getProtocolLifetimeStats(),
+          subgraph.getAllSeasons(),
+        ]);
+        if (cancelled) return;
+        setProtocolStats(protocol ?? null);
+        setAllSeasons(seasons ?? []);
+
+        if (protocol?.currentSeasonId != null) {
+          const season = await subgraph.getSeason(protocol.currentSeasonId);
+          if (!cancelled) setCurrentSeasonSubgraph(season ?? null);
+
+          const withParticipants = await subgraph.getSeasonWithParticipants(
+            protocol.currentSeasonId,
+          );
+          if (!cancelled) setSeasonParticipants(withParticipants ?? null);
+        } else {
+          setCurrentSeasonSubgraph(null);
+          setSeasonParticipants(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setSubgraphError(e instanceof Error ? e.message : "Subgraph failed");
+          setProtocolStats(null);
+          setCurrentSeasonSubgraph(null);
+          setAllSeasons([]);
+          setSeasonParticipants(null);
+        }
+      } finally {
+        if (!cancelled) setSubgraphLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [subgraph]);
 
   const fetchCurrentSeason = useCallback(async () => {
     if (!evmSDK) return;
@@ -142,6 +269,7 @@ export default function Stake() {
       const result = await evmSDK.stakeEther(amount);
       setLastTxHash(result.txHash);
       fetchCurrentSeason();
+      refreshSubgraphData();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Stake ETH failed");
     } finally {
@@ -168,6 +296,7 @@ export default function Stake() {
       const result = await evmSDK.stakeToken(amount);
       setLastTxHash(result.txHash);
       fetchCurrentSeason();
+      refreshSubgraphData();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Stake token failed");
     } finally {
@@ -184,6 +313,7 @@ export default function Stake() {
       const result = await evmSDK.unstakeEth();
       setLastTxHash(result.txHash);
       fetchCurrentSeason();
+      refreshSubgraphData();
       if (effectiveStakerAddress) fetchStakerRecord();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unstake ETH failed");
@@ -201,6 +331,7 @@ export default function Stake() {
       const result = await evmSDK.unstakeToken();
       setLastTxHash(result.txHash);
       fetchCurrentSeason();
+      refreshSubgraphData();
       if (effectiveStakerAddress) fetchStakerRecord();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unstake token failed");
@@ -303,10 +434,10 @@ export default function Stake() {
 
       {/* Stake ETH */}
       <section style={cardStyle}>
-        <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
-          Stake ETH
-        </h3>
-        <p style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}>
+        <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>Stake ETH</h3>
+        <p
+          style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}
+        >
           {wethGateway
             ? "Uses WETH gateway; native ETH is wrapped and staked."
             : "No WETH gateway in config; use Stake token with WETH address."}
@@ -334,10 +465,10 @@ export default function Stake() {
 
       {/* Stake token */}
       <section style={cardStyle}>
-        <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
-          Stake token
-        </h3>
-        <p style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}>
+        <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>Stake token</h3>
+        <p
+          style={{ color: "#aaa", margin: "0 0 12px 0", fontSize: "0.875rem" }}
+        >
           Stake the configured token for this chain.
         </p>
         <div style={{ marginBottom: 12 }}>
@@ -363,9 +494,7 @@ export default function Stake() {
 
       {/* Unstake */}
       <section style={cardStyle}>
-        <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
-          Unstake
-        </h3>
+        <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>Unstake</h3>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <button
             type="button"
@@ -421,6 +550,174 @@ export default function Stake() {
         </div>
       </section>
 
+      {/* Subgraph staking data */}
+      {subgraphUrl && (
+        <section style={cardStyle}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
+            <h3 style={{ margin: 0, fontSize: "1rem" }}>
+              Subgraph staking data
+            </h3>
+            <button
+              type="button"
+              onClick={refreshSubgraphData}
+              disabled={subgraphLoading || !subgraph}
+              style={buttonStyle}
+            >
+              {subgraphLoading ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+          {subgraphLoading && (
+            <p style={{ color: "#94a3b8", margin: "0 0 12px 0" }}>
+              Loading subgraph data…
+            </p>
+          )}
+          {subgraphError && (
+            <p
+              style={{
+                color: "#fca5a5",
+                margin: "0 0 12px 0",
+                fontSize: 14,
+              }}
+            >
+              {subgraphError}
+            </p>
+          )}
+          {!subgraphLoading && !subgraphError && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {protocolStats && (
+                <div>
+                  <h4
+                    style={{
+                      margin: "0 0 8px 0",
+                      fontSize: 14,
+                      color: "#94a3b8",
+                    }}
+                  >
+                    Protocol (all-time)
+                  </h4>
+                  <p style={{ margin: "0 0 4px 0", fontSize: 13 }}>
+                    Total staked all time:{" "}
+                    {formatEther(protocolStats.totalStakedAllTime ?? 0n)} ETH
+                  </p>
+                  <p style={{ margin: 0, fontSize: 13 }}>
+                    Total rewards added all time:{" "}
+                    {formatEther(protocolStats.totalRewardsAddedAllTime ?? 0n)}{" "}
+                    ETH
+                  </p>
+                  <p style={{ margin: "4px 0 0 0", fontSize: 13 }}>
+                    Current season ID:{" "}
+                    {formatBigInt(protocolStats.currentSeasonId)}
+                  </p>
+                </div>
+              )}
+              {currentSeasonSubgraph && (
+                <div>
+                  <h4
+                    style={{
+                      margin: "0 0 8px 0",
+                      fontSize: 14,
+                      color: "#94a3b8",
+                    }}
+                  >
+                    Current season (subgraph)
+                  </h4>
+                  <p style={{ margin: "0 0 4px 0", fontSize: 13 }}>
+                    TVL: {formatEther(currentSeasonSubgraph.totalStaked ?? 0n)}{" "}
+                    ETH
+                  </p>
+                  <p style={{ margin: 0, fontSize: 13 }}>
+                    Rewards:{" "}
+                    {formatEther(currentSeasonSubgraph.totalReward ?? 0n)} ETH
+                  </p>
+                  <p style={{ margin: "4px 0 0 0", fontSize: 13 }}>
+                    Start:{" "}
+                    {new Date(
+                      Number(currentSeasonSubgraph.start) * 1000,
+                    ).toLocaleDateString()}{" "}
+                    – End:{" "}
+                    {new Date(
+                      Number(currentSeasonSubgraph.end) * 1000,
+                    ).toLocaleDateString()}
+                  </p>
+                </div>
+              )}
+              {seasonParticipants &&
+                seasonParticipants.participants.length > 0 && (
+                  <div>
+                    <h4
+                      style={{
+                        margin: "0 0 8px 0",
+                        fontSize: 14,
+                        color: "#94a3b8",
+                      }}
+                    >
+                      Participants ({seasonParticipants.participants.length})
+                    </h4>
+                    <div
+                      style={{
+                        maxHeight: 120,
+                        overflowY: "auto",
+                        fontSize: 12,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {seasonParticipants.participants.map((p, i) => (
+                        <div key={i} style={{ marginBottom: 4 }}>
+                          {p.staker.slice(0, 10)}…{p.staker.slice(-8)}:{" "}
+                          {formatEther(p.totalStaked)} ETH
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              {allSeasons.length > 0 && (
+                <div>
+                  <h4
+                    style={{
+                      margin: "0 0 8px 0",
+                      fontSize: 14,
+                      color: "#94a3b8",
+                    }}
+                  >
+                    All seasons ({allSeasons.length})
+                  </h4>
+                  <div
+                    style={{
+                      maxHeight: 150,
+                      overflowY: "auto",
+                      fontSize: 12,
+                    }}
+                  >
+                    {allSeasons.map((s) => (
+                      <div
+                        key={s.id}
+                        style={{
+                          marginBottom: 6,
+                          padding: 6,
+                          background: "#1a1a2e",
+                          borderRadius: 4,
+                        }}
+                      >
+                        Season #{formatBigInt(s.seasonId)}: TVL{" "}
+                        {formatEther(s.totalStaked)} ETH, Rewards{" "}
+                        {formatEther(s.totalReward)} ETH
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Current season */}
       <section style={cardStyle}>
         <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
@@ -442,9 +739,7 @@ export default function Stake() {
 
       {/* Season info */}
       <section style={cardStyle}>
-        <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>
-          Season info
-        </h3>
+        <h3 style={{ margin: "0 0 12px 0", fontSize: "1rem" }}>Season info</h3>
         <div style={{ marginBottom: 12 }}>
           <label style={labelStyle}>Season ID</label>
           <input
@@ -480,15 +775,21 @@ export default function Stake() {
                 seasonId: formatBigInt(seasonInfo.seasonId),
                 startTimestamp: formatBigInt(seasonInfo.startTimestamp),
                 endTimestamp: formatBigInt(seasonInfo.endTimestamp),
-                totalStakedEthAmount: formatBigInt(seasonInfo.totalStakedEthAmount),
+                totalStakedEthAmount: formatBigInt(
+                  seasonInfo.totalStakedEthAmount,
+                ),
                 totalStakedTokenAmount: formatBigInt(
                   seasonInfo.totalStakedTokenAmount,
                 ),
-                totalRewardEthAmount: formatBigInt(seasonInfo.totalRewardEthAmount),
+                totalRewardEthAmount: formatBigInt(
+                  seasonInfo.totalRewardEthAmount,
+                ),
                 totalRewardTokenAmount: formatBigInt(
                   seasonInfo.totalRewardTokenAmount,
                 ),
-                totalEthWeightValue: formatBigInt(seasonInfo.totalEthWeightValue),
+                totalEthWeightValue: formatBigInt(
+                  seasonInfo.totalEthWeightValue,
+                ),
                 totalTokenWeightValue: formatBigInt(
                   seasonInfo.totalTokenWeightValue,
                 ),

@@ -14,6 +14,8 @@ import {
   type TokenUpdatedEntity,
   type SeasonAssetEntity,
   type SeasonEntity,
+  type SeasonSummary,
+  type SeasonWithParticipants,
   type StakedEntity,
   type SubgraphClientConfig,
   type UnstakedEntity,
@@ -90,6 +92,8 @@ export class AintiVirusEVMSubgraph {
       withdrawalCount: asBigint(p.withdrawalCount),
       totalStaked: asBigint(p.totalStaked),
       totalClaimed: asBigint(p.totalClaimed),
+      totalStakedAllTime: p.totalStakedAllTime != null ? asBigint(p.totalStakedAllTime) : undefined,
+      totalRewardsAddedAllTime: p.totalRewardsAddedAllTime != null ? asBigint(p.totalRewardsAddedAllTime) : undefined,
       updatedBlockNumber: p.updatedBlockNumber ? asBigint(p.updatedBlockNumber) : null,
       updatedBlockTimestamp: p.updatedBlockTimestamp
         ? asBigint(p.updatedBlockTimestamp)
@@ -121,6 +125,8 @@ export class AintiVirusEVMSubgraph {
       withdrawalCount: asBigint(p.withdrawalCount),
       totalStaked: asBigint(p.totalStaked),
       totalClaimed: asBigint(p.totalClaimed),
+      totalStakedAllTime: p.totalStakedAllTime != null ? asBigint(p.totalStakedAllTime) : undefined,
+      totalRewardsAddedAllTime: p.totalRewardsAddedAllTime != null ? asBigint(p.totalRewardsAddedAllTime) : undefined,
       updatedBlockNumber: p.updatedBlockNumber ? asBigint(p.updatedBlockNumber) : null,
       updatedBlockTimestamp: p.updatedBlockTimestamp
         ? asBigint(p.updatedBlockTimestamp)
@@ -309,6 +315,8 @@ export class AintiVirusEVMSubgraph {
       start: asBigint(s.start),
       end: asBigint(s.end),
       duration: asBigint(s.duration),
+      totalStaked: s.totalStaked != null ? asBigint(s.totalStaked) : undefined,
+      totalReward: s.totalReward != null ? asBigint(s.totalReward) : undefined,
       assets: (s.assets ?? []).map((a: any) => ({
         id: a.id,
         asset: typeof a.asset === "string" ? a.asset : String(a.asset),
@@ -318,6 +326,54 @@ export class AintiVirusEVMSubgraph {
         totalWeight: asBigint(a.totalWeight),
       })),
     };
+  }
+
+  /**
+   * Get all seasons with TVL and rewards.
+   */
+  async getAllSeasons(): Promise<SeasonSummary[]> {
+    const data = await this.request<{ seasons: any[] }>(QUERIES.allSeasons);
+    return (data.seasons ?? []).map((s: any) => ({
+      id: s.id,
+      seasonId: asBigint(s.seasonId),
+      totalStaked: asBigint(s.totalStaked ?? 0),
+      totalReward: asBigint(s.totalReward ?? 0),
+      start: asBigint(s.start ?? 0),
+      end: asBigint(s.end ?? 0),
+    }));
+  }
+
+  /**
+   * Get season with participants (staker addresses and staked amounts).
+   */
+  async getSeasonWithParticipants(seasonId: bigint): Promise<SeasonWithParticipants | null> {
+    const id = seasonId.toString();
+    const data = await this.request<{ season: any | null }>(QUERIES.seasonWithParticipants, {
+      seasonId: id,
+    });
+
+    const s = data.season;
+    if (!s) return null;
+    return {
+      id: s.id,
+      seasonId: asBigint(s.seasonId),
+      start: asBigint(s.start),
+      end: asBigint(s.end),
+      duration: 0n,
+      totalStaked: s.totalStaked != null ? asBigint(s.totalStaked) : 0n,
+      totalReward: s.totalReward != null ? asBigint(s.totalReward) : 0n,
+      participants: (s.participants ?? []).map((p: any) => ({
+        staker: typeof p.staker === "string" ? p.staker : String(p.staker),
+        totalStaked: asBigint(p.totalStaked ?? 0),
+      })),
+    };
+  }
+
+  /**
+   * Get protocol lifetime stats (id = "protocol").
+   */
+  async getProtocolLifetimeStats(): Promise<ProtocolState | null> {
+    return this.getProtocol("protocol");
   }
 
   async getSeasonAssets(params?: {

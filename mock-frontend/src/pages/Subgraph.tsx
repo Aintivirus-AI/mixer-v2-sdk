@@ -286,6 +286,18 @@ export default function Subgraph() {
                 <span style={{ color: "#64748b" }}>Total claimed</span>
                 <div>{formatBigInt(protocol.totalClaimed)}</div>
               </div>
+              {protocol.totalStakedAllTime != null && (
+                <div>
+                  <span style={{ color: "#64748b" }}>Total staked (all-time)</span>
+                  <div>{formatBigInt(protocol.totalStakedAllTime)}</div>
+                </div>
+              )}
+              {protocol.totalRewardsAddedAllTime != null && (
+                <div>
+                  <span style={{ color: "#64748b" }}>Total rewards added (all-time)</span>
+                  <div>{formatBigInt(protocol.totalRewardsAddedAllTime)}</div>
+                </div>
+              )}
             </div>
           </section>
 

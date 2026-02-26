@@ -16,6 +16,8 @@ export const QUERIES = {
         withdrawalCount
         totalStaked
         totalClaimed
+        totalStakedAllTime
+        totalRewardsAddedAllTime
         updatedBlockNumber
         updatedBlockTimestamp
         updatedTransactionHash
@@ -40,6 +42,8 @@ export const QUERIES = {
         withdrawalCount
         totalStaked
         totalClaimed
+        totalStakedAllTime
+        totalRewardsAddedAllTime
         updatedBlockNumber
         updatedBlockTimestamp
         updatedTransactionHash
@@ -157,6 +161,8 @@ export const QUERIES = {
         start
         end
         duration
+        totalStaked
+        totalReward
         assets {
           id
           asset
@@ -164,6 +170,52 @@ export const QUERIES = {
           totalStaked
           totalReward
           totalWeight
+        }
+      }
+    }
+  `,
+
+  seasonWithParticipants: `
+    query GetSeasonParticipants($seasonId: ID!) {
+      season(id: $seasonId) {
+        id
+        seasonId
+        totalStaked
+        totalReward
+        start
+        end
+        participants {
+          staker
+          totalStaked
+        }
+      }
+    }
+  `,
+
+  allSeasons: `
+    query GetAllSeasons {
+      seasons(first: 100, orderBy: seasonId, orderDirection: desc) {
+        id
+        seasonId
+        totalStaked
+        totalReward
+        start
+        end
+      }
+    }
+  `,
+
+  seasonByAsset: `
+    query GetSeasonByAsset($seasonId: ID!) {
+      season(id: $seasonId) {
+        id
+        seasonId
+        totalStaked
+        totalReward
+        assets {
+          asset
+          totalStaked
+          totalReward
         }
       }
     }

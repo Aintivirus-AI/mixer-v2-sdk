@@ -49,6 +49,10 @@ export interface ProtocolState {
   withdrawalCount: bigint;
   totalStaked: bigint;
   totalClaimed: bigint;
+  /** Cumulative staked amount across all seasons */
+  totalStakedAllTime?: bigint;
+  /** Cumulative rewards added across all seasons */
+  totalRewardsAddedAllTime?: bigint;
   updatedBlockNumber?: bigint | null;
   updatedBlockTimestamp?: bigint | null;
   updatedTransactionHash?: string | null;
@@ -136,7 +140,32 @@ export interface SeasonEntity {
   start: bigint;
   end: bigint;
   duration: bigint;
+  /** TVL for the season (sum across assets) */
+  totalStaked?: bigint;
+  /** Total rewards for the season */
+  totalReward?: bigint;
   assets: SeasonAssetEntity[];
+}
+
+/** Per-staker participation in a season */
+export interface StakerSeasonParticipant {
+  staker: string;
+  totalStaked: bigint;
+}
+
+/** Season with participants list (from participants relation) */
+export interface SeasonWithParticipants extends Omit<SeasonEntity, "assets"> {
+  participants: StakerSeasonParticipant[];
+}
+
+/** Season summary for list views */
+export interface SeasonSummary {
+  id: string;
+  seasonId: bigint;
+  totalStaked: bigint;
+  totalReward: bigint;
+  start: bigint;
+  end: bigint;
 }
 
 export interface PaymentStats {
