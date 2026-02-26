@@ -668,7 +668,7 @@ export default function Stake() {
                         fontFamily: "monospace",
                       }}
                     >
-                      {seasonParticipants.participants.map((p, i) => (
+                      {seasonParticipants.participants.map((p: StakerSeasonParticipant, i: number) => (
                         <div key={i} style={{ marginBottom: 4 }}>
                           {p.staker.slice(0, 10)}…{p.staker.slice(-8)}:{" "}
                           {formatEther(p.totalStaked)} ETH
