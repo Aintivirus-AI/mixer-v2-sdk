@@ -120,6 +120,8 @@ export interface EvmChainConfig {
   wethGatewayAddress?: string;
   rpcUrl?: string;
   subgraphUrl?: string;
+  /** Subgraph API key for The Graph Gateway (Bearer token). Required when using gateway.thegraph.com */
+  subgraphApiKey?: string;
   /** Payment contract address (for subgraph payment stats / payment processed list) */
   paymentAddress?: string;
   /**

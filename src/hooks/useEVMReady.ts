@@ -32,11 +32,15 @@ export function useEVMReady(): UseEVMReadyReturn {
   const evmChainConfig =
     chainId != null ? getEvmChainConfig(chainId) : undefined;
   const subgraphUrl = evmChainConfig?.subgraphUrl;
+  const subgraphApiKey = evmChainConfig?.subgraphApiKey;
 
   const subgraph = useMemo(() => {
     if (!subgraphUrl) return null;
-    return new AintiVirusEVMSubgraph({ endpoint: subgraphUrl });
-  }, [subgraphUrl]);
+    const headers = subgraphApiKey
+      ? { Authorization: `Bearer ${subgraphApiKey}` }
+      : undefined;
+    return new AintiVirusEVMSubgraph({ endpoint: subgraphUrl, headers });
+  }, [subgraphUrl, subgraphApiKey]);
 
   const isSupportedEVMChain =
     chainId != null &&

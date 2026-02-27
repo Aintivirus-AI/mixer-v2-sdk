@@ -17,6 +17,7 @@ export const evmConfig = {
 };
 
 const SUBGRAPH_URL = import.meta.env.VITE_SUBGRAPH_URL as string | undefined;
+const SUBGRAPH_API_KEY = import.meta.env.VITE_SUBGRAPH_API_KEY as string | undefined;
 
 /** Full SDK config for MixerProviderWithWagmi (one place, hooks use context). */
 export const mixerSdkConfig = {
@@ -28,6 +29,7 @@ export const mixerSdkConfig = {
         ...(WETH_ADDRESS ? { wethAddress: WETH_ADDRESS } : {}),
         ...(WETH_GATEWAY_ADDRESS ? { wethGatewayAddress: WETH_GATEWAY_ADDRESS } : {}),
         ...(SUBGRAPH_URL ? { subgraphUrl: SUBGRAPH_URL } : {}),
+        ...(SUBGRAPH_API_KEY ? { subgraphApiKey: SUBGRAPH_API_KEY } : {}),
       },
       [mainnet.id]: {
         factoryAddress: import.meta.env.VITE_MAINNET_FACTORY_ADDRESS ?? FACTORY_ADDRESS,
@@ -36,6 +38,9 @@ export const mixerSdkConfig = {
         ...(WETH_GATEWAY_ADDRESS ? { wethGatewayAddress: WETH_GATEWAY_ADDRESS } : {}),
         ...(import.meta.env.VITE_MAINNET_SUBGRAPH_URL
           ? { subgraphUrl: import.meta.env.VITE_MAINNET_SUBGRAPH_URL }
+          : {}),
+        ...(import.meta.env.VITE_MAINNET_SUBGRAPH_API_KEY
+          ? { subgraphApiKey: import.meta.env.VITE_MAINNET_SUBGRAPH_API_KEY }
           : {}),
       },
     },

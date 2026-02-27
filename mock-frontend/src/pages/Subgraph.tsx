@@ -30,6 +30,7 @@ export default function Subgraph() {
   const mixer = useMixer();
   const evmConfig = chainId != null ? getEvmChainConfig(chainId) : undefined;
   const subgraphUrl = evmConfig?.subgraphUrl;
+  const subgraphApiKey = evmConfig?.subgraphApiKey;
   const configPaymentAddress = (evmConfig as { paymentAddress?: string } | undefined)?.paymentAddress;
 
   const [protocol, setProtocol] = useState<ProtocolState | null>(null);
@@ -44,8 +45,11 @@ export default function Subgraph() {
 
   const subgraph = useMemo(() => {
     if (!subgraphUrl) return null;
-    return new AintiVirusEVMSubgraph({ endpoint: subgraphUrl });
-  }, [subgraphUrl]);
+    const headers = subgraphApiKey
+      ? { Authorization: `Bearer ${subgraphApiKey}` }
+      : undefined;
+    return new AintiVirusEVMSubgraph({ endpoint: subgraphUrl, headers });
+  }, [subgraphUrl, subgraphApiKey]);
 
   // Resolve payment contract address: config first, then from factory via SDK when connected
   useEffect(() => {

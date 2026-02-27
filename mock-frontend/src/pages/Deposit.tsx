@@ -80,11 +80,15 @@ export default function Deposit() {
     evmChainConfig as { wethAddress?: string } | undefined
   )?.wethAddress?.toLowerCase();
   const subgraphUrl = evmChainConfig?.subgraphUrl;
+  const subgraphApiKey = evmChainConfig?.subgraphApiKey;
 
   const subgraph = useMemo(() => {
     if (!subgraphUrl) return null;
-    return new AintiVirusEVMSubgraph({ endpoint: subgraphUrl });
-  }, [subgraphUrl]);
+    const headers = subgraphApiKey
+      ? { Authorization: `Bearer ${subgraphApiKey}` }
+      : undefined;
+    return new AintiVirusEVMSubgraph({ endpoint: subgraphUrl, headers });
+  }, [subgraphUrl, subgraphApiKey]);
 
   const depositHook = (useDeposit as unknown as () => DepositHook)();
   const { deposit, calculateDepositAmount } = depositHook;
