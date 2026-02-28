@@ -447,6 +447,48 @@ export class AintiVirusEVMSubgraph {
     }));
   }
 
+  /**
+   * Fetch staked events for multiple season assets in a single subgraph call.
+   * Use instead of looping over assets with getStakedEvents to reduce API calls.
+   */
+  async getStakedEventsBulk(params: {
+    seasonAssetIds: string[];
+    staker?: string;
+    first?: number;
+    skip?: number;
+    orderDirection?: OrderDirection;
+  }): Promise<StakedEntity[]> {
+    const {
+      seasonAssetIds,
+      staker,
+      first = 500,
+      skip = 0,
+      orderDirection = "desc",
+    } = params;
+
+    if (seasonAssetIds.length === 0) return [];
+
+    const where: any = { seasonAsset_in: seasonAssetIds };
+    if (staker) where.staker = staker.toLowerCase();
+
+    const data = await this.request<{ stakeds: any[] }>(QUERIES.stakedEvents, {
+      first,
+      skip,
+      where,
+      orderDirection,
+    });
+
+    return (data.stakeds ?? []).map((e) => ({
+      id: e.id,
+      staker: e.staker,
+      seasonAsset: { id: e.seasonAsset?.id },
+      amount: asBigint(e.amount),
+      blockNumber: asBigint(e.blockNumber),
+      blockTimestamp: asBigint(e.blockTimestamp),
+      transactionHash: e.transactionHash,
+    }));
+  }
+
   async getUnstakedEvents(params?: {
     staker?: string;
     seasonAssetId?: string;
@@ -484,6 +526,48 @@ export class AintiVirusEVMSubgraph {
     }));
   }
 
+  /**
+   * Fetch unstaked events for multiple season assets in a single subgraph call.
+   * Use instead of looping over assets with getUnstakedEvents to reduce API calls.
+   */
+  async getUnstakedEventsBulk(params: {
+    seasonAssetIds: string[];
+    staker?: string;
+    first?: number;
+    skip?: number;
+    orderDirection?: OrderDirection;
+  }): Promise<UnstakedEntity[]> {
+    const {
+      seasonAssetIds,
+      staker,
+      first = 500,
+      skip = 0,
+      orderDirection = "desc",
+    } = params;
+
+    if (seasonAssetIds.length === 0) return [];
+
+    const where: any = { seasonAsset_in: seasonAssetIds };
+    if (staker) where.staker = staker.toLowerCase();
+
+    const data = await this.request<{ unstakeds: any[] }>(QUERIES.unstakedEvents, {
+      first,
+      skip,
+      where,
+      orderDirection,
+    });
+
+    return (data.unstakeds ?? []).map((e) => ({
+      id: e.id,
+      staker: e.staker,
+      seasonAsset: { id: e.seasonAsset?.id },
+      amount: asBigint(e.amount),
+      blockNumber: asBigint(e.blockNumber),
+      blockTimestamp: asBigint(e.blockTimestamp),
+      transactionHash: e.transactionHash,
+    }));
+  }
+
   async getClaimedEvents(params?: {
     staker?: string;
     seasonAssetId?: string;
@@ -502,6 +586,48 @@ export class AintiVirusEVMSubgraph {
     const where: any = {};
     if (staker) where.staker = staker.toLowerCase();
     if (seasonAssetId) where.seasonAsset = seasonAssetId;
+
+    const data = await this.request<{ claimeds: any[] }>(QUERIES.claimedEvents, {
+      first,
+      skip,
+      where,
+      orderDirection,
+    });
+
+    return (data.claimeds ?? []).map((e) => ({
+      id: e.id,
+      staker: e.staker,
+      seasonAsset: { id: e.seasonAsset?.id },
+      amount: asBigint(e.amount),
+      blockNumber: asBigint(e.blockNumber),
+      blockTimestamp: asBigint(e.blockTimestamp),
+      transactionHash: e.transactionHash,
+    }));
+  }
+
+  /**
+   * Fetch claimed events for multiple season assets in a single subgraph call.
+   * Use instead of looping over assets with getClaimedEvents to reduce API calls.
+   */
+  async getClaimedEventsBulk(params: {
+    seasonAssetIds: string[];
+    staker?: string;
+    first?: number;
+    skip?: number;
+    orderDirection?: OrderDirection;
+  }): Promise<ClaimedEntity[]> {
+    const {
+      seasonAssetIds,
+      staker,
+      first = 500,
+      skip = 0,
+      orderDirection = "desc",
+    } = params;
+
+    if (seasonAssetIds.length === 0) return [];
+
+    const where: any = { seasonAsset_in: seasonAssetIds };
+    if (staker) where.staker = staker.toLowerCase();
 
     const data = await this.request<{ claimeds: any[] }>(QUERIES.claimedEvents, {
       first,
